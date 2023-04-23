@@ -1,5 +1,5 @@
 from abc import ABC, abstractclassmethod, abstractmethod
-from typing import Any, List, Tuple, Map, Dict, Iterable
+from typing import Any, List, Tuple, Dict, Iterable, Self
 from dataclasses import dataclass
 from enum import Enum
 
@@ -18,9 +18,9 @@ class EndProcessMessage:
     isSuccess: bool
     
 @dataclass
-class SubscriberMetadata:
+class ProcessTableEntryMetadata:
     
-    """The metadata of a subscriber handle of a `SubscriberTableEntry`.
+    """The metadata of a process handle of a `ProcessTableEntry`.
     
     Fields:
         isCommunication: True if the subscriber is subscribed to messages sent by the process
@@ -33,7 +33,7 @@ class SubscriberMetadata:
     isTerminal: bool
     
 @dataclass
-class SubscriberTableEntry:
+class ProcessTableEntry:
     
     """Represents a single entry in a **subscriber table** of a process.
     
@@ -43,12 +43,15 @@ class SubscriberTableEntry:
         metadata: The metadata of the subscriber, contains information such as which messages should be
             sent to this subscriber (for example, whether the subscriber subscribes to all the messages,
             or just the `EndProcessMessage` sent when the process ends).
-        subscriber: The subscriber handle that can be called.
+        subscriber: The subscriber process.
+        # TODO
+        `Subscriber` should be of type AAISProcess; using `Any` in
+            type annotation is due to Python's limitations.
     """
 
     label: Any
-    metadata: SubscriberMetadata
-    subscriber: callable
+    metadata: ProcessTableEntryMetadata
+    process: Any
 
 @dataclass
 class InterProcessMessage:
@@ -61,7 +64,7 @@ class InterProcessMessage:
     
     message: Any
 
-class SubscriberTable:
+class ProcessTable:
     
     """Represents a subscriber table that is kept by every process in an AAIS system.
     """
@@ -69,7 +72,7 @@ class SubscriberTable:
     def __init__(self):
         self.entries = set()
     
-    def addSubscribers(self, entries: Iterable[SubscriberTableEntry]):
+    def addSubscribers(self, entries: Iterable[ProcessTableEntry]):
         """Adds entries to the subscriber table.
 
         Args:
@@ -78,11 +81,14 @@ class SubscriberTable:
         
         self.entries.update(entries)
     
-    def removeSubscribers(self, subscribers: Iterable[callable]):
+    def removeSubscribers(self, subscribers: Iterable[Any]):
         """Removes entries from the subscriber table.
         
         Args:
-            subscribers (Iterable[callable]): The subscribers to remove from the subscriber table.
+            subscribers (Iterable[AAISProcess]): The subscribers to remove from the subscriber table.
+        
+        # TODO: `subscribers` should be of type Iterable[AAISProcess]; using Iterable[Any] in type annotation is due to
+        # Python's limitations.
         """
         
         
@@ -108,7 +114,7 @@ class AAISProcess(ABC):
     """
     
     def __init__(self):
-        self._subscriberTable = SubscriberTable()
+        self._subscriberTable = ProcessTable()
 
     @abstractmethod
     # TODO: Determine argument types
@@ -121,8 +127,55 @@ class AAISProcess(ABC):
         pass
     
     @abstractmethod
-    # TODO: determine argument types
-    def addSubscriber(self, *args, **kwargs):
+    def addSubscriber(
+        self, label: Any, subscriber: Self,
+        subscribeToCommunication: bool, subscribeToTerminal: bool):
+        
+        """Add a subscriber to this process.
+
+        Args:
+            label (Any): The label of the subscriber which will be used in the subscriber table entry.
+                This is usually a description of what would happen if the subscriber is called, written
+                in the AAIS's **thinking language**.
+                
+            subscriberHandle (callable): The callable handle of the subscriber.
+            
+            subscribeToCommunication (bool): Whether this subscriber wishes to receive communication messages
+                sent by the current process.
+                
+            subscribeTerminal (bool): Whether this subscriber wishes to receive the end-process message
+                sent when the current process ends.
+        """
+        
+        new_entry = ProcessTableEntry(
+            label=label,
+            metadata=ProcessTableEntryMetadata(isCommunication=subscribeToCommunication, isTerminal=subscribeToTerminal),
+            process=subscriber)
+        
+        self._subscriberTable.addSubscribers([new_entry])
+
+    @abstractmethod
+    def handleCommunicationMessage(self, message: InterProcessMessage):
+        
+        """Handles a communication message sent by a running process that the current process
+        subscribes to.
+
+        Args:
+            message (InterProcessMessage): The message sent to this process.
+        """
+        
+        pass
+    
+    @abstractmethod
+    def handleEndProcessMessage(self, message: EndProcessMessage):
+        
+        """Handles an end-process message sent by a process that just ended running
+        (whether successfully or not) and that the current process subscribes to.
+
+        Args:
+            message (EndProcessMessage): The end-process message sent to this process.
+        """
+        
         pass
     
 class WorkerProcess(AAISProcess):
