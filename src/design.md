@@ -31,14 +31,15 @@ when the process terminates (either successfully or with an error).
 When a process sends a message, it does the following things:
 
 1. Decide the content of the message. The content is consistent across messages received by
-all subscribers; different subscribers receive the same message, but handle it differently.
-
+   all subscribers; different subscribers receive the same message, but handle it differently.
 2. Decide which subscribers to send the message to. This is usually done by prompting an LLM,
-letting the LLM to decide which subscribers should receive the message, based on the description
-of each subscriber (stored in the process table).
-
+   letting the LLM to decide which subscribers should receive the message, based on the description
+   of each subscriber (stored in the process table).
 3. Send the message to the subscribers. This involves calling the message handling methods
-of each subscriber. Message handling methods are a consistent interface for all subscribers,
-but different process classes may override these methods for customized behavior.
+   of each subscriber. Message handling methods are a consistent interface for all subscribers,
+   but different process classes may override these methods for customized behavior.
+4. Optionally wait for the message to be received. The message handling method on the subscriber
+   should be awaitable, and should complete when the message finished being received (e.g.,
+   when the message is added to the prompt history).
 
 There are other ways to implement message passing; for example, instead of sending the same message to all subscribers and let the subscribers handle the message in a customized way, one may choose to customize the message before sending it to a subscriber.
