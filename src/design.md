@@ -14,7 +14,7 @@ current process, and the other for the process that the current process subscrib
 
 The reference table is a dynamic database that every process maintains.
 It contains handles to processes that the current process references, as well as a description of each referee.
-The description is typically used by an LLM to infer which referees to send messages to,
+The description is typically used by an LLM to infer which referees are to send messages to,
 as well as to provide context information when a referee sends a message to the current process,
 so it typically contains information such as:
 
@@ -33,13 +33,22 @@ When a process sends a message, it does the following things:
 1. Decide the content of the message. The content is consistent across messages received by
    all subscribers; different subscribers receive the same message, but handle it differently.
 2. Decide which subscribers to send the message to. This is usually done by prompting an LLM,
-   letting the LLM to decide which subscribers should receive the message, based on the description
+   letting the LLM decide which subscribers should receive the message, based on the description
    of each subscriber (stored in the process table).
 3. Send the message to the subscribers. This involves calling the message handling methods
    of each subscriber. Message handling methods are a consistent interface for all subscribers,
    but different process classes may override these methods for customized behavior.
-4. Optionally wait for the message to be received. The message handling method on the subscriber
-   should be awaitable, and should complete when the message finished being received (e.g.,
+4. Optionally, wait for the message to be received. The message handling method on the subscriber
+   should be awaitable, and should complete when the message finished being received (e.g.
    when the message is added to the prompt history).
 
-There are other ways to implement message passing; for example, instead of sending the same message to all subscribers and let the subscribers handle the message in a customized way, one may choose to customize the message before sending it to a subscriber.
+There are other ways to implement message passing;
+for example, instead of sending the same message to all subscribers
+and let the subscribers handle the message in a customized way;
+one may choose to customize the message before sending it to
+a subscriber.
+
+The very basic form of the message to send (i.e., the "base class")
+contains the following information:
+- The content of the message, in the AAIS's thinking language.
+- The sender of the message. This is important in e.g., nested API servers.
