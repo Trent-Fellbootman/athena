@@ -1,8 +1,8 @@
-from ..core import AAISProcess, AAISMessage, AAISMessageType, AAISThinkingLanguageContent
+from ..core.core import AAISProcess, AAISMessage, AAISMessageType, AAISThinkingLanguageContent
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Set, Dict, List, Tuple, Optional, Iterable, Self
+from typing import Any, Dict, Tuple
 
 
 class AAISProcessAPIHubServer(AAISProcess, ABC):
