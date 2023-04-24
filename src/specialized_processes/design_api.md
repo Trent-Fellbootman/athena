@@ -75,3 +75,45 @@ that the caller has received the message, and it can proceed to
 the part of the API call which can only happen after the caller
 is notified of the status of the API call, such as setting up
 the communication channel.
+
+## Interactive / Manageable API Calls
+
+### Interactive API Calls
+
+Some API calls are interactive, meaning that completing the API call
+requires interaction between the API and the caller.
+Typically, the interactive sessions in these API calls are implemented
+as special processes spawned by the API server and connected to the caller.
+When the caller wishes to make such an API call, it sends a request to
+the API server; the API server is only responsible for spawning the
+interactive session process and setting up the communication channel
+between the spawned process and the caller.
+The actual API call, as well as the interactions, are handled by the
+spawned process, NOT by the API server.
+
+In this way, the API server handles only one request message from
+the caller, and sends back only one return message per API call,
+and does not need to worry about matching messages sent by the caller
+to the correct API call in progress.
+
+These special interactive sessions whose only purpose is to complete
+an API call interactively are typically implemented as special
+processes, child classes of the process base class.
+It is the API module developer's responsibility to implement these
+special processes.
+
+### Manageable API Calls
+
+Unlocking interactivity in API calls also brings another benefit:
+one can make API calls "manageable" simply by making them interactive.
+
+For example, consider a non-interactive API call that takes a long time
+to complete and progressively uses a lot of resources.
+With the call being non-interactive, the API call can only continue
+toward the end after it is issued, even if at some point the caller
+no longer needs its result.
+However, one can easily wrap this call in an interactive session.
+When this is done, the API call starts running after the session
+starts; if the caller no longer needs the result, it can simply
+send a message to the session (i.e., the "manager" of the API call)
+to stop the API call.
