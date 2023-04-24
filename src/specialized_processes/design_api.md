@@ -1,72 +1,77 @@
 # API Server Design
 
-## Thinking Language Translation
+## Design Principles
 
-Each module server is responsible for translating the info / warning /
-error messages to the thinking language of the AAIS system.
+An API server is just like any process in an AAIS system.
+A process is able to call the API as long as it has a reference
+to the API server process stored in its reference table, and it
+makes an API call by sending a message to the API server.
+A process can also have references to multiple API server processes
+in its reference table at the same time; in this way, it can forward
+calls of different APIs, or different classes of APIs to the
+appropriate API server.
 
-For avoiding boilerplate code, default translators should be available.
+Caller processes are unaware of the internal structure or
+implementations of the API server.
+The API server appears to the caller process as one coherent
+entity with the ability to call one or multiple APIs.
 
-For translation between API-intelligible language (which basically
-means commands that the underlying intelligent or non-intelligent API
-can be fed directly without further translation. E.g., for a
-terminal API, this could be bash commands) and the AAIS's
-thinking language, the API module server should implement the
-following additional methods:
+## API Server Hierarchy
 
-- `checkForValidityAndParseArguments`: Takes in the message
-written in the thinking language, checks for validity of the
-request and parses the arguments. Since this method is
-- `makeReturnMessage`: Takes the output of the underlying
-actual API and formats it into a message written in the
-thinking language. This method typically formats INFO, WARNING and
-ERROR logs, as well as the final output into a single message. This
-method is also responsible for filtering and summarizing the logs,
-returning only what the caller needs to know.
+API servers are composable, meaning that small, specialized
+API servers can be combined to form a larger, more complex API server
+with multiple capabilities.
+In this way, an API server is actually a tree structure, with
+the leaves being the "terminal API servers" (i.e., API servers
+that have access to only one, "atomic" API, such as DALL E 2).
+When a process calls this API server, what actually happens is that
+the request gets passed down and dispatched at each level of the tree,
+until it reaches the terminal API server.
+Similarly, when a terminal API server reports the status of an API
+call to the caller, the status gets passed back up the tree
+until it reaches the root, and then the caller process.
 
-The underlying actual API (e.g., the bash terminal) is
-thinking-language-agnostic. To make the actual API call,
-the API module server implements the following additional method:
+## Timing and Synchronization
 
-- `makeAPICall`: Takes in the arguments parsed by `checkForValidityAndParseArguments`
-and makes the actual API call. This method is awaitable; it
-completes when the API call is completed or terminated with an error.
-It returns the output of the API call, as well as the logs (if any).
-This method typically involves no artificial intelligence (except
-when the API itself is intelligent, e.g., if the API is DALL E 2).
+One special type of API calls are those that set up communication
+channels between the caller and another process.
+When this is the case, the caller first needs to know that a new
+communication channel will be set up; only then can the new "contact"
+start sending messages to the caller.
 
-## Establishing New Communication Channels
+In these scenarios, the API call actually consists of two parts:
+the first part involves things like parsing arguments and checking
+for validity, which does not interfere with the caller process and
+can happen before the caller is notified of the status of the API
+call; the second part involves setting up the communication channel,
+which can only happen after the caller is notified of the status of
+the API call.
 
-An API call is not completely a regular inter-process communication.
-Special methods are implemented on the API hub & API module server
-to handle the peculiarities of API calls.
+To handle these cases, the `handleMessage` method of an API server
+needs to be customized.
+It first determines whether the message is a request to make an API
+call or a response from one of its sub-servers (typically by checking
+the type of the message or some special metadata fields).
+In the former case, the message is considered to be "handled" when
+it is received by the current server (NOT when it reaches the leaf
+node, since it is possible that the request is inappropriate and
+the API server is unable to find a sub-server that can do the job),
+so there is nothing that needs to be awaited;
+in the latter case, the message is considered to be "handled" only
+when it reaches the original caller, so the API server needs to
+call the `handleMessage` method of its parent (if any.
+Here, "parent" means the process from which the API call
+corresponding to the process is dispatched) and await on it.
+If the parent is the caller process, then `handleMessage` method
+would complete when the caller process receives the message;
+if the parent is another "higher-level" API server, then a
+call to its `handleMessage` method would invoke the same procedure,
+until the caller process is reached.
+The result is a stack of calls to `handleMessage`, completed only
+when the caller receives the message.
 
-The API hub implements the following additional methods:
-- `callAPI`, which forwards the caller process's request to the
-API module server, and returns the response to the caller process.
-- `reportToCaller`, which is called by the API module server.
-This method forwards the API module server's reports regarding
-the status of the API call and is awaitable; it completes when
-the API hub server confirms that the caller has received the
-message.
-
-When an API module server receives a request from the API hub,
-it does the following:
-
-1. Check for validity and parse the arguments with `checkForValidityAndParseArguments`.
-2. Make the API call with `makeAPICall`, or return an error message
-if the request is invalid.
-3. Wait until **the part that can happen before the caller is
-acknowledged about the status of the call**, is completed. For non-interactive
-API calls, this is the end of the API call; for interactive
-API calls, this is the time when the interactive session is spawned,
-the spawned process is notified of the existence of the caller,
-and what follows is the matter between the caller and the spawned
-session, which is none of the API module server's business.
-4. Forward the call status to the caller via the API hub's
-`reportToCaller` method. Wait until it is confirmed that
-the caller has received the message.
-5. Interactive API calls only: do the remaining part of the API call
-that can only happen after the caller is notified. For interactive
-sessions, this typically means setting up the communication channel
-between the caller and the spawned session.
+When the `handleMessage` method completes, the API server is certain
+that the caller has received the message, and it can proceed to
+the part of the API call which can only happen after the caller
+is notified of the status of the API call, such as setting up
+the communication channel.
