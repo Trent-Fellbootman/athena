@@ -46,7 +46,8 @@ class AAISAPIServerArgumentParseResult:
     errorMessage: Any | None
 
 
-class AAISAPIServerAPICallResult:
+@dataclass
+class AAISAPIServerAPICallInitiateResult:
     """
     Represents the result of an API call made by the API server,
     after validating and parsing the arguments.
@@ -123,7 +124,7 @@ class AAISAPIServerProcess(AAISProcess, ABC):
 
     def __init__(self):
         super().__init__()
-        self._runningTasks = []
+        self._requestProcessQueue = []
 
     # override
     async def handleMessage(self, message: AAISMessage):
@@ -137,7 +138,7 @@ class AAISAPIServerProcess(AAISProcess, ABC):
 
         # schedule the processing of request in the event loop
         if isinstance(message, AAISAPIRequestMessage):
-            self._runningTasks.append(asyncio.create_task(self.processRequest(message)))
+            self._requestProcessQueue.append(asyncio.create_task(self.processRequest(message)))
         else:
             # TODO: customize error class
             raise Exception("Invalid message type: {}".format(type(message)))
@@ -192,7 +193,7 @@ class AAISAPIServerProcess(AAISProcess, ABC):
             return
 
         # parse succeeded, initiate the API call
-        call_initiate_result = await self.initiateAPICall(parse_result.arguments)
+        call_initiate_result = await self.initiateAPICall(parse_result.arguments, request.sender)
 
         if not call_initiate_result.success:
             # API call failed, make the return message
@@ -238,7 +239,8 @@ class AAISAPIServerProcess(AAISProcess, ABC):
         pass
 
     @abstractmethod
-    async def initiateAPICall(self, arguments: AAISAPIServerCallArguments) -> AAISAPIServerAPICallResult:
+    async def initiateAPICall(self, arguments: AAISAPIServerCallArguments, caller: AAISProcess)\
+            -> AAISAPIServerAPICallInitiateResult:
         """
         Initiates the API call to the underlying API interface.
 
@@ -259,8 +261,8 @@ class AAISAPIHubServerProcess(AAISAPIServerProcess, ABC):
     """
 
     # override
-    async def initiateAPICall(self, arguments: AAISAPIServerCallArguments)\
-            -> AAISAPIServerAPICallResult:
+    async def initiateAPICall(self, arguments: AAISAPIServerCallArguments, caller: AAISProcess)\
+            -> AAISAPIServerAPICallInitiateResult:
         """
         This method simply directs the request to the correct "child API server".
         """
@@ -274,26 +276,78 @@ class AAISTerminalAPIServerProcess(AAISAPIServerProcess, ABC):
     Represents a terminal API server.
     """
 
+    class AAISTerminalAPICallContext(ABC):
+        """
+        Represents all information needed
+        to determine what an API call does,
+        and the current status of the API call operation.
+        """
+
+        pass
+
+    def __init__(self):
+        super().__init__()
+
+        # keeps record of all API calls in progress
+        self._apiCallsInProgress = []
+
     # override
-    async def initiateAPICall(self, arguments: AAISAPIServerCallArguments)\
-            -> AAISAPIServerAPICallResult:
+    async def initiateAPICall(self, arguments: AAISAPIServerCallArguments, caller: AAISProcess)\
+            -> AAISAPIServerAPICallInitiateResult:
         """
         This method starts a coroutine that makes the API call
         from start to finish.
+
+        However, the method itself returns as soon as the API call is initiated.
         """
-        # TODO
+
+        # schedule the API call
+        self._apiCallsInProgress.append(asyncio.create_task(self.performAPICall(arguments=arguments, caller=caller)))
+
+        # TODO: add actual report & error message
+        return AAISAPIServerAPICallInitiateResult(success=True, report=None, errorMessage=None)
+
+    async def performAPICall(self, arguments: AAISAPIServerCallArguments, caller: AAISProcess):
+        """
+        Performs the API call.
+        Call to this method is scheduled by `initiateAPICall`.
+        """
+
+        # create context
+        context = await self.createInitialAPICallContext(arguments)
+        # pre-report API call
+        report_message = await self.preReportAPICall(context)
+        # wait for the caller to receive the report message
+        await report_message.send(caller)
+        # now it is safe to do the post-report portion of the API call
+        # post-report API call
+        await self.postReportAPICall(context, caller)
+
+        # all stages of the API call finished, method returns here
+
+    @abstractmethod
+    async def createInitialAPICallContext(self, arguments: AAISAPIServerCallArguments) -> AAISTerminalAPICallContext:
+        """
+        Creates the initial context for an API call, given the parsed arguments.
+        """
+
         pass
 
     @abstractmethod
-    async def performAPICall(self, arguments: AAISAPIServerCallArguments) -> Any:
+    async def preReportAPICall(self, context: AAISTerminalAPICallContext) -> AAISAPIServerReportMessage:
         """
-        Performs the API call.
-        This method is called by `initiateAPICall`.
+        Performs the pre-report portion of an API call.
+
+        This method returns after the pre-report portion of the API call finishes.
         """
+
         pass
 
-    # @abstractmethod
-    # TODO: async def preReportAPICall(self):
+    @abstractmethod
+    async def postReportAPICall(self, context: AAISTerminalAPICallContext, caller: AAISProcess):
+        """
+        Performs the post-report portion of an API call
+        (typically things that mingles with the caller).
+        """
 
-    # @abstractmethod
-    # TODO: async def postReportAPICall(self):
+        pass
