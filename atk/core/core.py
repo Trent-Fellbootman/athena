@@ -76,6 +76,7 @@ class AAISMessageMetadata:
 
 @dataclass
 class AAISMessage(ABC):
+    sender: "AAISProcess"
     metadata: AAISMessageMetadata
     content: AAISThinkingLanguageContent
 

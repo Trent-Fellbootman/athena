@@ -76,6 +76,26 @@ the part of the API call which can only happen after the caller
 is notified of the status of the API call, such as setting up
 the communication channel.
 
+## Request Handling Walkthrough
+
+When a process (the caller) sends a request to the API server,
+the API server does the following:
+
+1. Add the request to the request processing queue.
+It is possible that the caller would `await` on the API server's
+`handleMessage` method; the `handleMessage` of the API server
+returns as soon as the request is added to the processing queue (to
+avoid deadlocks).
+2. Process the request. This includes:
+   1. Parse the request message.
+   2. Make the pre-report API call (the portion of the API call
+   that does not tamper with the caller and can thus happen
+   before notifying the caller).
+   3. Report the status of the API call to the caller and wait
+   until the caller receives the message.
+   4. Make the post-report API call (the portion of the API call
+   that can only happen after notifying the caller).
+
 ## Interactive / Manageable API Calls
 
 ### Interactive API Calls

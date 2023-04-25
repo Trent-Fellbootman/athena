@@ -1,245 +1,218 @@
-from ..core.core import AAISProcess, AAISMessage, AAISMessageType, AAISThinkingLanguageContent
-from abc import ABC, abstractmethod
+import asyncio
+
+from ..core.core import *
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Dict, Tuple
+from abc import ABC, abstractmethod
 
 
-class AAISProcessAPIHubServer(AAISProcess, ABC):
-    """The API hub server process.
+class AAISAPIRequestMessage(AAISMessage):
 
-    # I/O format
-
-    The "API hub" expects to receive a request
-    in the form of the AAIS system's thinking language,
-    and send messages in the thinking language as well.
-
-    # Role
-
-    The API hub is essentially a manager of multiple available
-    "extensions" to an AAIS system's capabilities beyond thinking in
-    its thinking language. Examples of such "extensions" may include:
-
-    - "OS-only privileged functionalities" (e.g., spawning
-    processes to do lower-level jobs; similar to sys calls.)
-    - Multimedia read/write functionalities (e.g., DALL E 2, Gen 2, GPT 4)
-    - Internet search & content retrieval (i.e., browser)
-    - Operating system access (e.g., disk, sys calls, etc.)
-    - Access to non-process components of this AAIS system (e.g., memory)
-
-    The API hub is in charge of spawning worker processes ONLY;
-    when it receives a request and checks that the request is valid,
-    it just spawns a worker process, sets up the communication
-    channel between the requestor and the worker (by modifying their
-    reference tables), and what happens next is none of its business.
-
-    The API hub is designed to be disentangled with concrete
-    implementations of the various APIs themselves; each API
-    is a separate module that can be "inserted" to or "removed" from
-    the API hub dynamically.
-
-    For each API, the API hub
-    only has access to a brief description regarding what it does,
-    in order to determine the particular API that a request is trying
-    to access. It does NOT handle the potential API-specific invalidity
-    of a request, and neither does it parse the arguments contained
-    in the request; validity check and thinking-language-to-argument parsing
-    are the APIs' job.
-
-    When an API hub receives a request, it does the following:
-
-    1. Determine the particular API to access.
-    2. Forward the request to a specific API (i.e., the "module").
-    3. When the API module reports success or failure, the API hub
-    tells the requesting process about this and forwards the API module
-    server's output to the requesting process. The module server's output
-    may be an info message (e.g., "image have been saved to `/tmp/image.png`")
-    or an error message (e.g., "list index out of range").
     """
+    Represents a request message sent from the caller
+    to the API server.
 
-    def __init__(self):
-        super().__init__()
+    Note that `sender` (attribute of `AAISMessage` base class)
+    is not the same as `caller` (attribute of this class).
 
-    # override
-    def handleMessage(self, message: AAISMessage):
-        """For an API hub, the message passed in to this callback
-        is always assumed to be a request.
-
-        Args:
-            message (AAISMessage): The request.
-        """
-
-        # TODO
-
-
-class AAISAPICallRequestMessageMetadata:
-    """Metadata for an API request.
-
-    Fields:
-        caller: A handle to AAIS process that sent the request.
+    In nested API servers, `sender` denotes the upstream
+    API server from which the message is dispatched;
+    `caller` denotes the actual process that requested
+    the API call.
     """
 
     caller: AAISProcess
 
 
-class AAISAPICallResultType(Enum):
-    success = 0
-    failure = 1
+class AAISAPIServerCallArguments(ABC):
+    """
+    Represents the PARSED arguments of an API call, arguments
+    that are passed to the API server's underlying, typically
+    non-intelligent API interface.
+    """
+    pass
 
 
 @dataclass
-class AAISAPICallResult:
-    """Represents the result of an API call.
-
-    Fields:
-        resultType: Whether the call succeeded or failed.
-        result: The result of the call.
+class AAISAPIServerArgumentParseResult:
+    """
+    Represents the result of parsing an API call's arguments
+    from a request written in thinking language.
     """
 
-    resultType: AAISAPICallResultType
-    result: Any
+    # whether parsing was successful
+    success: bool
+    # the parsed arguments, if parsing was successful
+    arguments: AAISAPIServerCallArguments | None
+    # the error message, if parsing was unsuccessful
+    errorMessage: Any | None
+
+
+class AAISAPIServerAPICallResult:
+    """
+    Represents the result of an API call made by the API server,
+    after validating and parsing the arguments.
+    """
+
+    # whether the API call was successful
+    success: bool
+    # the report of the API call, if successful
+    report: Any | None
+    # the error message, if unsuccessful
+    errorMessage: Any | None
 
 
 @dataclass
-class AAISAPICallReturnMessageMetadata:
-    callStatus: AAISAPICallResultType
-
-
-class AAISAPICallReturnMessage(AAISMessage):
-    """Represents the return message of an API call.
-
-    Fields:
-        result: The result of the call.
+class AAISAPIServerReportMessage(AAISMessage):
     """
+    Represents a report message sent from the API server.
 
-    metadata: AAISAPICallReturnMessageMetadata
+    This message is sent after the pre-report stage of the API call
+    has finished, but before the post-report stage starts.
 
-    def __init__(self, content: AAISThinkingLanguageContent, metadata: AAISAPICallReturnMessageMetadata):
-        super().__init__(messageType=AAISMessageType.communication, content=content)
+    The API server begins the post-report stage of an API call
+    only after awaiting and making sure that the caller has received
+    this message.
 
-        self.metadata = metadata
+    Pre-report stage means the portion of the API call that does not
+    tamper with the caller and can thus happen before notifying the caller.
 
-
-class AAISProcessAPIModuleServer(AAISProcess, ABC):
-    """Represents an API module registered at the API hub.
-    
-    # I/O Format
-    
-    An API module server expects requests written in the
-    AAIS system's thinking language, and sends messages in
-    that language as well.
-    
-    # Role
-    
-    An API module server handles API requests. When it receives
-    a request, it does the following:
-    
-    1. Parse the arguments and check for validity. Checking that
-    the request is appropriate the API is not mandatory,
-    since it is already done by the API hub server.
-    2. Do what it should and report success or failure to the API
-    hub server.
-        1. Failure should be reported as soon as possible (e.g.,
-        report arguments invalidity immediately after the argument parsing
-        stage). For non-interactive API calls, such as image-text conversion,
-        success should be reported after the entire API call has finished,
-        and the message to be sent should contain all information expressible
-        in the AAIS's thinking language.
-        2. For interactive API calls, such as initiating a chatbot session,
-        success should be reported **AFTER** it is certain that the API call will be
-        successful (which is basically after arguments have been proven valid),
-        and the interactive session should be started **AFTER** acknowledging that
-        the requesting process has received the success message, to avoid
-        the interactive session process sending messages to the requesting process
-        before it knows that the interactive session has been spawned.
-
-    The API module server itself should be thinking language agnostic.
+    Post-report stage means the portion of the API call that can only
+    happen after notifying the caller.
+    E.g., setting up a new communication channel for the caller
+    by modifying its reference table.
     """
 
     @dataclass
-    class AAISAPICallResult:
-        """
-        Represents the result of an API call.
+    class Metadata:
+        success: bool
 
-        Fields:
-            resultType: Whether the API call succeeded or failed.
-            resultMessage: The message to sent back.
-        """
+    metadata: Metadata
 
-        resultType: AAISAPICallResultType
-        resultMessage: Any
 
-    @abstractmethod
-    async def validateAndParseArguments(self, request: AAISMessage) \
-            -> Tuple[bool, Dict[str, Any] | Any]:
-        """Validates a request,
-        and parses the arguments into a format that is more convenient
-        for the API module server to use. The parsed arguments are "machine-intelligible"
-        (i.e, suitable for use with non-intelligent APIs).
+class AAISAPIServerProcess(AAISProcess, ABC):
+    """
+    Represents an API server.
 
-        Args:
-            request (AAISMessage): The request.
+    Note that the API server does not need to use the AAIS system's
+    thinking language internally;
+    it only needs to communicate in the thinking language of the system.
+    """
 
-        Returns:
-            Tuple[bool, Dict[str, Any] | Any]: A tuple of two elements,
-                with the first being the parsing result type (True if success, False if failure),
-                and the second being the parsed arguments (if success) or the error message (if failure).
-        """
-
-        pass
-
-    @abstractmethod
-    async def callAPI(self, args: Dict[str, Any]) -> AAISAPICallResult:
-        """Calls the API with the parsed arguments. When calling
-        this method, it is assumed that the arguments are valid.
-
-        Args:
-            args (Dict[str, Any]): The parsed arguments.
-        """
-
-        pass
+    def __init__(self):
+        super().__init__()
+        self._runningTasks = []
 
     # override
     async def handleMessage(self, message: AAISMessage):
-        """
-        Take in a request, try to parse arguments and call the API
-
-        Args:
-            message (AAISMessage): The request.
-        """
-
-        success, result = self.validateAndParseArguments(message)
-
-        if success:
-            # success parsing arguments
-            # call actual API
-            call_result = await self.callAPI(result)
-            assert type(call_result) is AAISAPICallResult
-
-            if call_result == AAISAPICallResultType.success:
-                # success calling API
-                # send success message to API hub
-                return_message = AAISAPICallReturnMessage(
-                    content=await self.systemHandle
-                    .thinkingLanguageServer
-                    .convertToThinkingLanguage(call_result.resultMessage),
-                    metadata=AAISAPICallReturnMessageMetadata(callStatus=AAISAPICallResultType.success))
-
-            else:
-                # failure calling API
-                # send failure message to API hub
-                return_message = AAISAPICallReturnMessage(
-                    content=await self.systemHandle
-                    .thinkingLanguageServer
-                    .convertToThinkingLanguage(call_result.resultMessage),
-                    metadata=AAISAPICallReturnMessageMetadata(callStatus=AAISAPICallResultType.failure))
+        # schedule the processing of request in the event loop
+        if isinstance(message, AAISAPIRequestMessage):
+            self._runningTasks.append(asyncio.create_task(self.processRequest(message)))
         else:
-            # failure parsing arguments
-            # send error message to API hub
-            return_message = AAISAPICallReturnMessage(
-                content=await self.systemHandle
-                .thinkingLanguageServer
-                .convertToThinkingLanguage(result),
-                metadata=AAISAPICallReturnMessageMetadata(callStatus=AAISAPICallResultType.failure))
+            # TODO: customize error class
+            raise Exception("Invalid message type: {}".format(type(message)))
 
-        # send back the message
+        # `handleMessage` returns here, to avoid deadlocks
+
+    async def processRequest(self, request: AAISAPIRequestMessage):
+        """
+        Processes an API call request.
+        This includes:
+
+        1. Parse the request message with `validateAndParseArguments`.
+        2. Make the pre-report API call (the portion of the API call
+        that does not tamper with the caller and can thus happen
+        before notifying the caller).
+        3. Report the status of the API call to the caller and wait
+        until the caller receives the message.
+        4. Make the post-report API call (the portion of the API call
+        that can only happen after notifying the caller).
+
+        The above components are run in a serial manner.
+        That is, the next component is run after awaiting the previous.
+        """
+
+        # TODO
+        # parse the arguments
+        parse_result = await self.validateAndParseArguments(request)
+
+        if not parse_result.success:
+            # parse failed, send back the error message
+            # make the return message
+            return_message = self.makeArgumentParseErrorReturnMessage(parse_result.errorMessage)
+            # send back the message.
+            # note that the error message is sent back to the parent; not the caller
+            # also wait until the message is received.
+            await return_message.send(request.sender)
+
+            return
+
+        # parse succeeded, make the API call
+        call_result = await self.makeAPICall(parse_result.arguments)
+
+        if call_result.success:
+            # API call succeeded, make the return message
+            return_message = self.makeAPICallSuccessReportReturnMessage(call_result.report)
+            # send back the message.
+            # note that the report is sent back to the parent; not the caller
+            # also wait until the message is received.
+            await return_message.send(request.sender)
+        else:
+            # API call failed, make the return message
+            return_message = self.makeAPICallErrorReturnMessage(call_result.errorMessage)
+            # send back the message.
+            # note that the error message is sent back to the parent; not the caller
+            # also wait until the message is received.
+            await return_message.send(request.sender)
+
+        # API call request processing finishes here.
+
+    @abstractmethod
+    def makeArgumentParseErrorReturnMessage(self, errorMessage: Any) \
+            -> AAISAPIServerReportMessage:
+        """
+        Makes the return message for an API call
+        from argument parse error returned by `validateAndParseArguments`.
+        """
+
+        pass
+
+    @abstractmethod
+    def makeAPICallErrorReturnMessage(self, errorMessage: Any) \
+            -> AAISAPIServerReportMessage:
+        """
+        Makes the return message for an API call
+        from the error message of an unsuccessful API call, returned by `makeAPICall`.
+
+        Note that when this method is called, it is
+        assumed that the argument parsing stage is successful.
+        """
+
+        pass
+
+    @abstractmethod
+    def makeAPICallSuccessReportReturnMessage(self, report: Any) \
+            -> AAISAPIServerReportMessage:
+        """
+        Makes the return message for an API call
+        from the report of a successful API call, returned by `makeAPICall`.
+        """
+
+        pass
+
+    @abstractmethod
+    async def validateAndParseArguments(self, request: AAISAPIRequestMessage) \
+            -> AAISAPIServerArgumentParseResult:
+        """
+        Validates and parses the arguments of an API call
+        from a request written in thinking language.
+        """
+
+        pass
+
+    @abstractmethod
+    async def makeAPICall(self, arguments: AAISAPIServerCallArguments) -> AAISAPIServerAPICallResult:
+        """
+        Makes the API call to the underlying API interface.
+        """
+
+        pass
