@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 
 
 class AAISAPIRequestMessage(AAISMessage):
-
     """
     Represents a request message sent from the caller
     to the API server.
@@ -96,6 +95,30 @@ class AAISAPIServerProcess(AAISProcess, ABC):
     Note that the API server does not need to use the AAIS system's
     thinking language internally;
     it only needs to communicate in the thinking language of the system.
+
+    This is the BASE CLASS of all API servers, including
+    API hubs (i.e., API servers that simply direct the
+    API calls to the correct sub-servers) and "terminal API servers"
+    (i.e., API servers that do the actual work and do not have "child API servers").
+
+    Hub servers and terminal servers may add additional abstract methods.
+
+    Generally, when an API server receives a request, this is what happens:
+    1. The API server adds the request to the task queue.
+    When this is done, handleMessage` returns.
+    2. When the request is taken out of the task queue, the API server
+    parses the request and validates the arguments.
+    3. The API server initiates the API call.
+
+    If arguments are invalid or API call initiation fails,
+    the API server sends back an error message to the sender
+    of the request message, and the API call finishes.
+    This message will ultimately be forwarded to the caller.
+
+    If the API call is successfully initiated, no message is sent back
+    and `processRequest` returns.
+    In this case, a message will be sent back when the API call
+    actually completes (or when the pre-report stage completes).
     """
 
     def __init__(self):
@@ -104,6 +127,14 @@ class AAISAPIServerProcess(AAISProcess, ABC):
 
     # override
     async def handleMessage(self, message: AAISMessage):
+        """
+        For API servers, the `handleMessage` method only
+        adds the message to the task queue.
+
+        Awaiting this method is NOT waiting for the API
+        call to complete.
+        """
+
         # schedule the processing of request in the event loop
         if isinstance(message, AAISAPIRequestMessage):
             self._runningTasks.append(asyncio.create_task(self.processRequest(message)))
@@ -116,7 +147,17 @@ class AAISAPIServerProcess(AAISProcess, ABC):
     async def processRequest(self, request: AAISAPIRequestMessage):
         """
         Processes an API call request.
-        This includes:
+        This method only INITIATES the API call.
+        The return of this method does NOT mean that the API call
+        has completed.
+        Instead, when the API call actually completes, another message
+        is sent back to the caller.
+
+        Awaiting this method is NOT waiting for the API call to finish.
+
+        For "terminal API servers" (i.e., API servers
+        that do the actual work and do not have "child API servers"),
+        calling this method does the following:
 
         1. Parse the request message with `validateAndParseArguments`.
         2. Make the pre-report API call (the portion of the API call
@@ -129,9 +170,13 @@ class AAISAPIServerProcess(AAISProcess, ABC):
 
         The above components are run in a serial manner.
         That is, the next component is run after awaiting the previous.
+
+        For "API hubs" (i.e., API servers that simply direct the
+        API calls to the correct sub-servers (which can be either
+        "terminal API servers" or other API hubs), this method
+        simply directs the request to the correct "child API server".
         """
 
-        # TODO
         # parse the arguments
         parse_result = await self.validateAndParseArguments(request)
 
@@ -146,25 +191,18 @@ class AAISAPIServerProcess(AAISProcess, ABC):
 
             return
 
-        # parse succeeded, make the API call
-        call_result = await self.makeAPICall(parse_result.arguments)
+        # parse succeeded, initiate the API call
+        call_initiate_result = await self.initiateAPICall(parse_result.arguments)
 
-        if call_result.success:
-            # API call succeeded, make the return message
-            return_message = self.makeAPICallSuccessReportReturnMessage(call_result.report)
-            # send back the message.
-            # note that the report is sent back to the parent; not the caller
-            # also wait until the message is received.
-            await return_message.send(request.sender)
-        else:
+        if not call_initiate_result.success:
             # API call failed, make the return message
-            return_message = self.makeAPICallErrorReturnMessage(call_result.errorMessage)
+            return_message = self.makeAPICallInitiateErrorReturnMessage(call_initiate_result.errorMessage)
             # send back the message.
             # note that the error message is sent back to the parent; not the caller
             # also wait until the message is received.
             await return_message.send(request.sender)
 
-        # API call request processing finishes here.
+        # API call request processing finishes here. What happens next is not the responsibility of this method.
 
     @abstractmethod
     def makeArgumentParseErrorReturnMessage(self, errorMessage: Any) \
@@ -177,7 +215,7 @@ class AAISAPIServerProcess(AAISProcess, ABC):
         pass
 
     @abstractmethod
-    def makeAPICallErrorReturnMessage(self, errorMessage: Any) \
+    def makeAPICallInitiateErrorReturnMessage(self, errorMessage: Any) \
             -> AAISAPIServerReportMessage:
         """
         Makes the return message for an API call
@@ -185,16 +223,6 @@ class AAISAPIServerProcess(AAISProcess, ABC):
 
         Note that when this method is called, it is
         assumed that the argument parsing stage is successful.
-        """
-
-        pass
-
-    @abstractmethod
-    def makeAPICallSuccessReportReturnMessage(self, report: Any) \
-            -> AAISAPIServerReportMessage:
-        """
-        Makes the return message for an API call
-        from the report of a successful API call, returned by `makeAPICall`.
         """
 
         pass
@@ -210,9 +238,62 @@ class AAISAPIServerProcess(AAISProcess, ABC):
         pass
 
     @abstractmethod
-    async def makeAPICall(self, arguments: AAISAPIServerCallArguments) -> AAISAPIServerAPICallResult:
+    async def initiateAPICall(self, arguments: AAISAPIServerCallArguments) -> AAISAPIServerAPICallResult:
         """
-        Makes the API call to the underlying API interface.
+        Initiates the API call to the underlying API interface.
+
+        Note that this method only initiates the API call;
+        awaiting this method does NOT wait for the API call to finish.
         """
 
         pass
+
+
+class AAISAPIHubServerProcess(AAISAPIServerProcess, ABC):
+    """
+    Represents an API hub server.
+
+    API hub servers are API servers that simply direct the
+    API calls to the correct sub-servers (which can be either
+    "terminal API servers" or other API hubs).
+    """
+
+    # override
+    async def initiateAPICall(self, arguments: AAISAPIServerCallArguments)\
+            -> AAISAPIServerAPICallResult:
+        """
+        This method simply directs the request to the correct "child API server".
+        """
+
+        # TODO
+        pass
+
+
+class AAISTerminalAPIServerProcess(AAISAPIServerProcess, ABC):
+    """
+    Represents a terminal API server.
+    """
+
+    # override
+    async def initiateAPICall(self, arguments: AAISAPIServerCallArguments)\
+            -> AAISAPIServerAPICallResult:
+        """
+        This method starts a coroutine that makes the API call
+        from start to finish.
+        """
+        # TODO
+        pass
+
+    @abstractmethod
+    async def performAPICall(self, arguments: AAISAPIServerCallArguments) -> Any:
+        """
+        Performs the API call.
+        This method is called by `initiateAPICall`.
+        """
+        pass
+
+    # @abstractmethod
+    # TODO: async def preReportAPICall(self):
+
+    # @abstractmethod
+    # TODO: async def postReportAPICall(self):
