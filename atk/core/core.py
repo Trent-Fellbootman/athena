@@ -62,7 +62,7 @@ class AAISMessageType(Enum):
 
 
 @dataclass
-class AAISMessageMetadata:
+class AAISMessageHeader:
     """
     Represents metadata that all messages have.
 
@@ -75,9 +75,8 @@ class AAISMessageMetadata:
 
 
 @dataclass
-class AAISMessage(ABC):
-    sender: "AAISProcess"
-    metadata: AAISMessageMetadata
+class AAISMessagePacket(ABC):
+    header: AAISMessageHeader
     content: AAISThinkingLanguageContent
 
     async def send(self, process: "AAISProcess"):
@@ -181,7 +180,7 @@ class AAISProcess(ABC):
         self.systemHandle = systemHandle
 
     @abstractmethod
-    async def handleMessage(self, message: AAISMessage):
+    async def handleMessage(self, message: AAISMessagePacket):
         """
         This method is called when a message is sent to the process.
 

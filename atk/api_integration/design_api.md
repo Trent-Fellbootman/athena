@@ -1,139 +1,72 @@
-# API Server Design
+# Hierarchical API server design
 
-## Design Principles
+## Introduction
 
-An API server is just like any process in an AAIS system.
-A process is able to call the API as long as it has a reference
-to the API server process stored in its reference table, and it
-makes an API call by sending a message to the API server.
-A process can also have references to multiple API server processes
-in its reference table at the same time; in this way, it can forward
-calls of different APIs, or different classes of APIs to the
-appropriate API server.
+The basic idea is, when looking at inputs / outputs,
+there is no difference between an API server
+(whether terminal or hub) and an ordinary process.
+Both send / receive messages the same way, and
+message sending does not block for reasons other than
+network issues (i.e., the message sending coroutine
+completes as long as the message is **received**, but not
+necessarily **processed**).
 
-Caller processes are unaware of the internal structure or
-implementations of the API server.
-The API server appears to the caller process as one coherent
-entity with the ability to call one or multiple APIs.
+The difference between an API server and a regular process
+lies in the internal structure & prompting methods being used.
+Such a difference enables API servers to exhibit different behavior,
+e.g., discriminating between API requests and return messages from
+child API servers, forwarding return messages to the correct parent, etc.
 
-## API Server Hierarchy
+## API Hubs
 
-API servers are composable, meaning that small, specialized
-API servers can be combined to form a larger, more complex API server
-with multiple capabilities.
-In this way, an API server is actually a tree structure, with
-the leaves being the "terminal API servers" (i.e., API servers
-that have access to only one, "atomic" API, such as DALL E 2).
-When a process calls this API server, what actually happens is that
-the request gets passed down and dispatched at each level of the tree,
-until it reaches the terminal API server.
-Similarly, when a terminal API server reports the status of an API
-call to the caller, the status gets passed back up the tree
-until it reaches the root, and then the caller process.
+There are two capabilities specific to API hub servers:
 
-## Timing and Synchronization
+1. Discriminating between API requests and return messages from child API servers;
+2. Forwarding return messages to the correct parent.
 
-One special type of API calls are those that set up communication
-channels between the caller and another process.
-When this is the case, the caller first needs to know that a new
-communication channel will be set up; only then can the new "contact"
-start sending messages to the caller.
+Achieving the first one is easy: just use an LLM to identify the nature
+of the messages.
 
-In these scenarios, the API call actually consists of two parts:
-the first part involves things like parsing arguments and checking
-for validity, which does not interfere with the caller process and
-can happen before the caller is notified of the status of the API
-call; the second part involves setting up the communication channel,
-which can only happen after the caller is notified of the status of
-the API call.
+The second one is a bit more complicated.
+The idea is to keep a table of all received API requests as well as
+information associated with each of them.
+In a typical implementation,
+each entry in the table should store the following information:
 
-To handle these cases, the `handleMessage` method of an API server
-needs to be customized.
-It first determines whether the message is a request to make an API
-call or a response from one of its sub-servers (typically by checking
-the type of the message or some special metadata fields).
-In the former case, the message is considered to be "handled" when
-it is received by the current server (NOT when it reaches the leaf
-node, since it is possible that the request is inappropriate and
-the API server is unable to find a sub-server that can do the job),
-so there is nothing that needs to be awaited;
-in the latter case, the message is considered to be "handled" only
-when it reaches the original caller, so the API server needs to
-call the `handleMessage` method of its parent (if any.
-Here, "parent" means the process from which the API call
-corresponding to the process is dispatched) and await on it.
-If the parent is the caller process, then `handleMessage` method
-would complete when the caller process receives the message;
-if the parent is another "higher-level" API server, then a
-call to its `handleMessage` method would invoke the same procedure,
-until the caller process is reached.
-The result is a stack of calls to `handleMessage`, completed only
-when the caller receives the message.
+1. A summary of what the request is about (what the caller wants to do)
+2. A local ID that uniquely identifies the request in the table.
+3. The address of the request's sender (this could be either the
+caller or the parent API server from which the request is forwarded).
+4. The status of the message (e.g., running, completed, failed, etc.).
 
-When the `handleMessage` method completes, the API server is certain
-that the caller has received the message, and it can proceed to
-the part of the API call which can only happen after the caller
-is notified of the status of the API call, such as setting up
-the communication channel.
+The whole life cycle of an API request at an API hub server
+is as follows:
 
-## Request Handling Walkthrough
+1. Hub server receives an API request from a client.
+2. The hub server determines the nature of the message (a request), and
+creates a new entry in the table for it.
+The entry is filled as follows:
+   1. The hub server summarizes the request and fills the summary field.
+   2. The hub server calls a local ID generator (typically non-intelligent)
+   and assigns the generated ID to the ID field.
+   3. The metadata field of the received message typically contains
+   the sender's address, which is copied to the address field.
+   4. The status field is set to "unhandled".
+3. The hub server forwards the request to the correct child API server
+and sets the status field to "running".
+4. When the child API server returns a message and the message
+is determined to be about the request, the hub server sets the status
+field to "completed" (or failed, etc.) and forwards the message to the client.
 
-When a process (the caller) sends a request to the API server,
-the API server does the following:
+## Setting Up New Communication Channels
 
-1. Add the request to the request processing queue.
-It is possible that the caller would `await` on the API server's
-`handleMessage` method; the `handleMessage` of the API server
-returns as soon as the request is added to the processing queue (to
-avoid deadlocks).
-2. Process the request. This includes:
-   1. Parse the request message.
-   2. Make the pre-report API call (the portion of the API call
-   that does not tamper with the caller and can thus happen
-   before notifying the caller).
-   3. Report the status of the API call to the caller and wait
-   until the caller receives the message.
-   4. Make the post-report API call (the portion of the API call
-   that can only happen after notifying the caller).
+In some cases, completing an API call requires settings up new
+communication channels for the caller by modifying its reference table.
 
-## Interactive / Manageable API Calls
+In such cases, the "instructions" to set up the communication channel
+are embedded in the message returned to the caller.
+E.g., the hub server may return to the caller a message like this:
 
-### Interactive API Calls
-
-Some API calls are interactive, meaning that completing the API call
-requires interaction between the API and the caller.
-Typically, the interactive sessions in these API calls are implemented
-as special processes spawned by the API server and connected to the caller.
-When the caller wishes to make such an API call, it sends a request to
-the API server; the API server is only responsible for spawning the
-interactive session process and setting up the communication channel
-between the spawned process and the caller.
-The actual API call, as well as the interactions, are handled by the
-spawned process, NOT by the API server.
-
-In this way, the API server handles only one request message from
-the caller, and sends back only one return message per API call,
-and does not need to worry about matching messages sent by the caller
-to the correct API call in progress.
-
-These special interactive sessions whose only purpose is to complete
-an API call interactively are typically implemented as special
-processes, child classes of the process base class.
-It is the API module developer's responsibility to implement these
-special processes.
-
-### Manageable API Calls
-
-Unlocking interactivity in API calls also brings another benefit:
-one can make API calls "manageable" simply by making them interactive.
-
-For example, consider a non-interactive API call that takes a long time
-to complete and progressively uses a lot of resources.
-With the call being non-interactive, the API call can only continue
-toward the end after it is issued, even if at some point the caller
-no longer needs its result.
-However, one can easily wrap this call in an interactive session.
-When this is done, the API call starts running after the session
-starts; if the caller no longer needs the result, it can simply
-send a message to the session (i.e., the "manager" of the API call)
-to stop the API call.
+*"I have spawned a new process that will guide you through completing
+this API call.
+The process is listening on port 12345 and you can connect to it."*
