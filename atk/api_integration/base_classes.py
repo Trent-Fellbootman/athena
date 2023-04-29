@@ -1,8 +1,8 @@
-import asyncio
-
 from ..core.core import *
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from typing import List, Any
+import asyncio
 
 
 class AAISAPIRequestMessage(AAISMessage):
@@ -19,7 +19,11 @@ class AAISAPIRequestMessage(AAISMessage):
     the API call.
     """
 
+    # the ultimate caller of the API call
     caller: AAISProcess
+    # the stack of non-terminal API servers that the request has passed through.
+    # the process at the bottom is the caller, while the top is the sender.
+    routerStack: List[AAISProcess]
 
 
 class AAISAPIServerCallArguments(ABC):
@@ -87,6 +91,10 @@ class AAISAPIServerReportMessage(AAISMessage):
         success: bool
 
     metadata: Metadata
+    # the processes that the request has passed through
+    # the bottom of the stack is the caller, while the top of the stack
+    # is the receiver of the message
+    routerStack: List[AAISProcess]
 
 
 class AAISAPIServerProcess(AAISProcess, ABC):
@@ -138,7 +146,14 @@ class AAISAPIServerProcess(AAISProcess, ABC):
 
         # schedule the processing of request in the event loop
         if isinstance(message, AAISAPIRequestMessage):
+            # Message is an API call request from a caller
             self._requestProcessQueue.append(asyncio.create_task(self.processRequest(message)))
+        elif isinstance(message, AAISAPIServerReportMessage):
+            # Message is a report from another API server.
+            # pop the router stack, forward the report to the "parent"
+            # and wait for the message to be handled
+            parent = message.routerStack.pop()
+            await message.send(parent)
         else:
             # TODO: customize error class
             raise Exception("Invalid message type: {}".format(type(message)))
@@ -184,7 +199,13 @@ class AAISAPIServerProcess(AAISProcess, ABC):
         if not parse_result.success:
             # parse failed, send back the error message
             # make the return message
-            return_message = self.makeArgumentParseErrorReturnMessage(parse_result.errorMessage)
+            return_message = self.translateArgumentParseError(parse_result.errorMessage)
+            routers = request.routerStack.copy()
+            return_message = AAISAPIServerReportMessage(
+                content=return_message,
+                metadata=AAISAPIServerReportMessage.Metadata(success=False),
+                sender=self,
+                routerStack=routers)
             # send back the message.
             # note that the error message is sent back to the parent; not the caller
             # also wait until the message is received.
@@ -197,7 +218,12 @@ class AAISAPIServerProcess(AAISProcess, ABC):
 
         if not call_initiate_result.success:
             # API call failed, make the return message
-            return_message = self.makeAPICallInitiateErrorReturnMessage(call_initiate_result.errorMessage)
+            return_message = self.translateAPICallInitiationError(call_initiate_result.errorMessage)
+            return_message = AAISAPIServerReportMessage(
+                content=return_message,
+                metadata=AAISAPIServerReportMessage.Metadata(success=False),
+                sender=self,
+                routerStack=request.routerStack.copy())
             # send back the message.
             # note that the error message is sent back to the parent; not the caller
             # also wait until the message is received.
@@ -206,8 +232,8 @@ class AAISAPIServerProcess(AAISProcess, ABC):
         # API call request processing finishes here. What happens next is not the responsibility of this method.
 
     @abstractmethod
-    def makeArgumentParseErrorReturnMessage(self, errorMessage: Any) \
-            -> AAISAPIServerReportMessage:
+    def translateArgumentParseError(self, errorMessage: Any) \
+            -> AAISThinkingLanguageContent:
         """
         Makes the return message for an API call
         from argument parse error returned by `validateAndParseArguments`.
@@ -216,8 +242,8 @@ class AAISAPIServerProcess(AAISProcess, ABC):
         pass
 
     @abstractmethod
-    def makeAPICallInitiateErrorReturnMessage(self, errorMessage: Any) \
-            -> AAISAPIServerReportMessage:
+    def translateAPICallInitiationError(self, errorMessage: Any) \
+            -> AAISThinkingLanguageContent:
         """
         Makes the return message for an API call
         from the error message of an unsuccessful API call, returned by `makeAPICall`.
@@ -251,6 +277,24 @@ class AAISAPIServerProcess(AAISProcess, ABC):
         pass
 
 
+@dataclass
+class AAISAPIHubServerSubServerTableEntry:
+    """
+    Represents an entry in the sub-server table of an API hub server.
+    """
+
+    # functional description of the sub-server
+    functionalDescription: AAISThinkingLanguageContent
+    # handle to the sub-server
+    server: AAISAPIServerProcess
+
+
+@dataclass
+class AAISAPIHubServerCallArguments(AAISAPIServerCallArguments):
+    selectedSubServer: AAISAPIServerProcess
+    requestMessage: AAISAPIRequestMessage
+
+
 class AAISAPIHubServerProcess(AAISAPIServerProcess, ABC):
     """
     Represents an API hub server.
@@ -260,14 +304,55 @@ class AAISAPIHubServerProcess(AAISAPIServerProcess, ABC):
     "terminal API servers" or other API hubs).
     """
 
+    def __init__(self):
+        super().__init__()
+
+        # sub-server table
+        self._subServerTable: Set[AAISAPIHubServerSubServerTableEntry] = set()
+
     # override
-    async def initiateAPICall(self, arguments: AAISAPIServerCallArguments, caller: AAISProcess)\
+    async def validateAndParseArguments(self, request: AAISAPIRequestMessage) \
+            -> AAISAPIServerArgumentParseResult:
+        """
+        tries to find a sub-server to direct the API call to.
+        """
+
+        match await self.selectSubServer(request):
+            case None:
+                # no sub-server found, return error
+                # TODO: add actual error message?
+                return AAISAPIServerArgumentParseResult(
+                    success=False, errorMessage=None, arguments=None)
+            case subServer:
+                # sub-server found, return the arguments
+                return AAISAPIServerArgumentParseResult(
+                    success=True,
+                    errorMessage=None,
+                    arguments=AAISAPIHubServerCallArguments(selectedSubServer=subServer, requestMessage=request))
+
+    # override
+    async def initiateAPICall(self, arguments: AAISAPIHubServerCallArguments, caller: AAISProcess)\
             -> AAISAPIServerAPICallInitiateResult:
         """
         This method simply directs the request to the correct "child API server".
         """
 
-        # TODO
+        # TODO: should we modify the request message?
+        request_message = arguments.requestMessage
+        request_message.routerStack.append(self)
+        await request_message.send(arguments.selectedSubServer)
+
+        return AAISAPIServerAPICallInitiateResult(success=True, errorMessage=None, report=None)
+
+    @abstractmethod
+    async def selectSubServer(self, request: AAISAPIRequestMessage)\
+            -> AAISAPIServerProcess:
+        """
+        Selects the sub-server to direct the API call to.
+        If the API call cannot be directed to any sub-server,
+        return None.
+        """
+
         pass
 
 
@@ -276,13 +361,18 @@ class AAISTerminalAPIServerProcess(AAISAPIServerProcess, ABC):
     Represents a terminal API server.
     """
 
+    @dataclass
     class AAISTerminalAPICallContext(ABC):
         """
         Represents all information needed
         to determine what an API call does,
+        all information needed to perform an API call & report to caller,
         and the current status of the API call operation.
         """
 
+        routerStack: List[AAISProcess]
+
+    class PreReportAPICallReport(ABC):
         pass
 
     def __init__(self):
@@ -316,7 +406,9 @@ class AAISTerminalAPIServerProcess(AAISAPIServerProcess, ABC):
         # create context
         context = await self.createInitialAPICallContext(arguments)
         # pre-report API call
-        report_message = await self.preReportAPICall(context)
+        api_report = await self.preReportAPICall(context)
+        report_message = await self.translateReport(api_report)
+        report_message.routerStack =
         # wait for the caller to receive the report message
         await report_message.send(caller)
         # now it is safe to do the post-report portion of the API call
@@ -334,11 +426,22 @@ class AAISTerminalAPIServerProcess(AAISAPIServerProcess, ABC):
         pass
 
     @abstractmethod
-    async def preReportAPICall(self, context: AAISTerminalAPICallContext) -> AAISAPIServerReportMessage:
+    async def preReportAPICall(self, context: AAISTerminalAPICallContext) -> PreReportAPICallReport:
         """
         Performs the pre-report portion of an API call.
 
         This method returns after the pre-report portion of the API call finishes.
+        """
+
+        pass
+
+    @abstractmethod
+    async def translateReport(self, report: PreReportAPICallReport) -> AAISAPIServerReportMessage:
+        """
+        Translates the pre-report report of an API call to a report message.
+
+        There is no need to set the `routerStack` of the report message in this method,
+        as that will be done in `performAPICall`.
         """
 
         pass
