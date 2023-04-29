@@ -39,7 +39,7 @@ class AAISAPIHub(ABC, AAISAPIServer):
                 # set the fields of the entry
                 new_api_call_entry.summary = await self.summarizeRequest(receivedMessage.content)
                 new_api_call_entry.sender = receivedMessage.header.sender
-                new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APIStatus.UNHANDLED
+                new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.UNHANDLED
 
                 # 2. Forward the request to the correct child API server
 
@@ -65,7 +65,7 @@ class AAISAPIHub(ABC, AAISAPIServer):
                         # send the packet to the child API server
                         await dispatch_packet.send(handler_match_result.handlerEntry.referee)
 
-                        new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APIStatus.RUNNING
+                        new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.RUNNING
 
                     case AAISAPIHub.APIHubServerHandlerMatchResult.ResultType.FAILURE:
                         # failed to find handler
@@ -88,7 +88,7 @@ class AAISAPIHub(ABC, AAISAPIServer):
                         # send the return message to the parent
                         await return_packet.send(receivedMessage.header.sender)
 
-                        new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APIStatus.FAILURE
+                        new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.FAILURE
 
             case AAISAPIServer.APIServerMessageType.returnMessage:
                 # 1. Find the corresponding record in the API call table
@@ -99,15 +99,15 @@ class AAISAPIHub(ABC, AAISAPIServer):
                         # successfully found the record
                         # TODO: Add error handling for these. Mismatch is always possible.
                         assert record_match_result.record is not None
-                        assert record_match_result.record.status == AAISAPIServer.APICallTable.Entry.APIStatus.RUNNING
+                        assert record_match_result.record.status == AAISAPIServer.APICallTable.Entry.APICallStatus.RUNNING
 
                         # update the status of the record
                         match await self.determineAPICallReturnResultType(
                                 receivedMessage.content, record_match_result.record):
                             case AAISAPIHub.APICallReturnResultType.SUCCESS:
-                                record_match_result.record.status = AAISAPIServer.APICallTable.Entry.APIStatus.SUCCESS
+                                record_match_result.record.status = AAISAPIServer.APICallTable.Entry.APICallStatus.SUCCESS
                             case AAISAPIHub.APICallReturnResultType.FAILURE:
-                                record_match_result.record.status = AAISAPIServer.APICallTable.Entry.APIStatus.FAILURE
+                                record_match_result.record.status = AAISAPIServer.APICallTable.Entry.APICallStatus.FAILURE
 
                         # send the return message to the parent
                         parent_return_message = await self.formatReturnMessageForParent(

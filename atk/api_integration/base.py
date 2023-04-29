@@ -16,7 +16,7 @@ class AAISAPIServer(ABC, AAISProcess):
 
         @dataclass
         class Entry:
-            class APIStatus(Enum):
+            class APICallStatus(Enum):
                 UNHANDLED = 0
                 RUNNING = 1
                 SUCCESS = 2
@@ -25,7 +25,7 @@ class AAISAPIServer(ABC, AAISProcess):
             summary: AAISThinkingLanguageContent
             id: Any  # TODO
             sender: AAISProcess
-            status: APIStatus
+            status: APICallStatus
 
         def __init__(self):
             self.entries: Set[Self.Entry] = set()
