@@ -3,13 +3,46 @@ Defines the base classes for the AAIS framework.
 """
 
 from abc import ABC, abstractmethod
-from typing import Self, Any, List, Tuple, Dict, Optional, Iterable, Set, Type, Sequence
+from typing import Any, Iterable, Optional, Self
 from dataclasses import dataclass
 from enum import Enum
-import asyncio
+
+
+@dataclass
+class AAISThinkingLanguageTranslationResult:
+    """
+    Represents the result of a translation.
+    """
+    success: bool
+    # the translated content in the target thinking language.
+    translatedContent: Optional[Any]
+    # the error message in the target thinking language.
+    errorMessage: Optional[Any]
 
 
 class AAISThinkingLanguageContent(ABC):
+    """
+    Represents content intelligible to a certain AI.
+    For example, for ChatGPT, this is a string;
+    for GPT-4, this might be a combination of text and images.
+    "ThinkingLanguageContent" is used when an AI is thinking.
+
+    Note that two pieces of information with the same encoding
+    are not necessarily of the same type of "ThinkingLanguageContent".
+    For example, Python, XML and natural language can all be encoded
+    as string; however, they are not of the same type of ThinkingLanguageContent.
+    Chinese and English are both natural languages; they are not the same type, either.
+
+    Such a difference should be reflected in the type of the content.
+    For example, Chinese content is of type "ChineseThinkingLanguageContent";
+    English content is of type "EnglishThinkingLanguageContent".
+    It is not recommended to use the same type for both Chinese and English content
+    (e.g., "NaturalLanguageContent" or "TextContent").
+
+    If the types of two objects are the same, they are assumed to have semantically
+    the same type (e.g., both Chinese).
+    """
+
     @abstractmethod
     @property
     async def isEmpty(self) -> bool:
@@ -19,32 +52,57 @@ class AAISThinkingLanguageContent(ABC):
 
         pass
 
-
-class AAISThinkingLanguageServer(ABC):
+    @staticmethod
     @abstractmethod
-    async def convertToThinkingLanguage(self, content: Any) -> AAISThinkingLanguageContent:
+    async def makeEmpty() -> Any:
         """
-        Converts the given content to the thinking language content.
+        Makes empty content of this type.
 
-        Returns:
-            The converted content.
-        """
-
-        pass
-
-    async def format(self, template: AAISThinkingLanguageContent, *args: Sequence[AAISThinkingLanguageContent]) \
-            -> AAISThinkingLanguageContent:
-        """
-        Fills in `template` with `args`.
+        # TODO: The type should be `Self`, instead of `Any`.
         """
 
         pass
 
+    @abstractmethod
+    @property
+    async def isValid(self) -> bool:
+        """
+        Returns true if the content is valid.
 
-class AAISSystemServer(ABC):
+        This is useful for checking semantic types.
+        E.g., if the content is English, but the type is Chinese,
+        this method should return false.
+        """
+        pass
 
-    def __init__(self, thinkingLanguageServerClass: Type[AAISThinkingLanguageServer]):
-        self.thinkingLanguageServer = thinkingLanguageServerClass()
+    @staticmethod
+    @abstractmethod
+    async def translateFrom(content: "AAISThinkingLanguageContent") -> AAISThinkingLanguageTranslationResult:
+        """
+        Translates the content from another type of ThinkingLanguageContent.
+
+        Returns the translation result.
+        """
+
+        pass
+
+    @abstractmethod
+    def add(self, other) -> Self:
+        """
+        Returns the concatenation of two `ThinkingLanguageContent` pieces.
+
+        This method typically involves no formatting or intelligent stuff,
+        and is expected to return quickly and thus not being awaitable.
+
+        The two pieces of content are assumed to be the same type.
+        """
+        pass
+
+    def __add__(self, other) -> Self:
+        # TODO: add error handling
+        assert type(self) == type(other)
+
+        return self.add(other)
 
 
 class AAISMessageType(Enum):
@@ -170,14 +228,13 @@ class AAISReferenceTable:
     metadata: Any
 
     # the entries in the table
-    entries: Set[AAISReferenceTableEntry]
+    entries: Iterable[AAISReferenceTableEntry]
 
 
 class AAISProcess(ABC):
 
-    def __init__(self, systemHandle: AAISSystemServer):
+    def __init__(self):
         self.referenceTable = AAISReferenceTable(metadata=None, entries=set())
-        self.systemHandle = systemHandle
 
     @abstractmethod
     async def handleMessage(self, message: AAISMessagePacket):

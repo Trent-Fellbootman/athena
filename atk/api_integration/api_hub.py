@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from base import AAISAPIServer
 from ..core.core import (
     AAISMessagePacket, AAISThinkingLanguageContent, AAISMessageHeader,
-    AAISMessageType, AAISProcess, AAISReferenceTableEntry
+    AAISMessageType, AAISReferenceTableEntry
 )
 from collections import deque
 
@@ -99,15 +99,18 @@ class AAISAPIHub(ABC, AAISAPIServer):
                         # successfully found the record
                         # TODO: Add error handling for these. Mismatch is always possible.
                         assert record_match_result.record is not None
-                        assert record_match_result.record.status == AAISAPIServer.APICallTable.Entry.APICallStatus.RUNNING
+                        assert record_match_result.record.status == \
+                               AAISAPIServer.APICallTable.Entry.APICallStatus.RUNNING
 
                         # update the status of the record
                         match await self.determineAPICallReturnResultType(
                                 receivedMessage.content, record_match_result.record):
                             case AAISAPIHub.APICallReturnResultType.SUCCESS:
-                                record_match_result.record.status = AAISAPIServer.APICallTable.Entry.APICallStatus.SUCCESS
+                                record_match_result.record.status = \
+                                    AAISAPIServer.APICallTable.Entry.APICallStatus.SUCCESS
                             case AAISAPIHub.APICallReturnResultType.FAILURE:
-                                record_match_result.record.status = AAISAPIServer.APICallTable.Entry.APICallStatus.FAILURE
+                                record_match_result.record.status = \
+                                    AAISAPIServer.APICallTable.Entry.APICallStatus.FAILURE
 
                         # send the return message to the parent
                         parent_return_message = await self.formatReturnMessageForParent(

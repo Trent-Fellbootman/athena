@@ -1,10 +1,10 @@
 from ..core.core import (
-    AAISProcess, AAISMessageHeader, AAISMessagePacket,
+    AAISProcess, AAISMessagePacket,
     AAISThinkingLanguageContent, AAISReferenceTableEntry
 )
 
 import asyncio
-from typing import List, Dict, Any, Optional, Iterable, Self
+from typing import Optional, Iterable
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -113,7 +113,7 @@ class AAISThinkerProcess(AAISProcess, ABC):
     async def handleThoughtInterpretationError(self, errorMessage: AAISThinkingLanguageContent):
         """
         Handles the error that occurred during thought interpretation.
-        For thinkers with LLM backends, this usually means
+        For thinkers with LLM backend_abstractions, this usually means
         formatting the error message into a report and adding the report
         to the message history.
 
@@ -125,7 +125,7 @@ class AAISThinkerProcess(AAISProcess, ABC):
     async def handleThoughtExecutionResult(self, result: AAISThoughtExecutionResult):
         """
         Handles the result of thought execution.
-        For thinkers with LLM backends, this usually means
+        For thinkers with LLM backend_abstractions, this usually means
         formatting the result into a report and adding the report
         to the message history.
 
@@ -152,7 +152,7 @@ class AAISThinkerProcess(AAISProcess, ABC):
         """
         Handles the thoughts produced in one thinking step.
 
-        For thinkers with LLM backends, this usually means
+        For thinkers with LLM backend_abstractions, this usually means
         adding the thoughts to the message history.
         """
         pass
@@ -230,7 +230,7 @@ class AAISThinkerProcess(AAISProcess, ABC):
     async def think(self) -> AAISThinkingLanguageContent:
         """
         Performs one thinking step and produce thoughts.
-        For thinking processes with LLM backends, this usually means
+        For thinking processes with LLM backend_abstractions, this usually means
         prompting the LLM and retrieving the response.
 
         Note that this method does not involve processing the unhandled messages,

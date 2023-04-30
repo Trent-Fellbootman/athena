@@ -1,9 +1,9 @@
 from ..core.core import AAISThinkingLanguageContent, AAISProcess
 
 from enum import Enum
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union, Set, Self
+from typing import Any, Set, Self
 
 
 class AAISAPIServer(ABC, AAISProcess):
