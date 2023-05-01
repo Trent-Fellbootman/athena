@@ -27,20 +27,16 @@ class AAISThinkingLanguageContent(ABC):
     for GPT-4, this might be a combination of text and images.
     "ThinkingLanguageContent" is used when an AI is thinking.
 
-    Note that two pieces of information with the same encoding
-    are not necessarily of the same type of "ThinkingLanguageContent".
-    For example, Python, XML and natural language can all be encoded
-    as string; however, they are not of the same type of ThinkingLanguageContent.
-    Chinese and English are both natural languages; they are not the same type, either.
+    Type consistency does not imply semantic consistency.
+    Two pieces of information can have the same `AAISThinkingLanguageContent` type,
+    as long as they have the same encoding.
+    For example, both natural language and code can be encoded as text;
+    they may share the same type (e.g., AAISText).
 
-    Such a difference should be reflected in the type of the content.
-    For example, Chinese content is of type "ChineseThinkingLanguageContent";
-    English content is of type "EnglishThinkingLanguageContent".
-    It is not recommended to use the same type for both Chinese and English content
-    (e.g., "NaturalLanguageContent" or "TextContent").
-
-    If the types of two objects are the same, they are assumed to have semantically
-    the same type (e.g., both Chinese).
+    It is the user's responsibility to translate the content
+    (e.g., from Chinese to English) when needed.
+    The framework offers flexibility to mix two pieces of information
+    even if they are in different languages semantically.
     """
 
     @abstractmethod
@@ -61,18 +57,6 @@ class AAISThinkingLanguageContent(ABC):
         # TODO: The type should be `Self`, instead of `Any`.
         """
 
-        pass
-
-    @abstractmethod
-    @property
-    async def isValid(self) -> bool:
-        """
-        Returns true if the content is valid.
-
-        This is useful for checking semantic types.
-        E.g., if the content is English, but the type is Chinese,
-        this method should return false.
-        """
         pass
 
     @staticmethod
