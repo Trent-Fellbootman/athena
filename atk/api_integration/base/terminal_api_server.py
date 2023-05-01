@@ -112,7 +112,7 @@ class AAISTerminalAPIServer(AAISAPIServer, ABC):
                 # make the packet to send back
                 return_header = AAISMessagePacket.Header(
                     messageType=AAISMessagePacket.Header.MessageType.communication,
-                    senderAddress=self)
+                    senderAddress=self.address)
 
                 return_packet = AAISMessagePacket(
                     header=return_header,

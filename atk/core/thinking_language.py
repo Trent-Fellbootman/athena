@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Optional, Self
+from typing import Any, Optional, Self, Iterable
 from abc import ABC, abstractmethod
 
 
@@ -82,3 +82,12 @@ class AAISThinkingLanguageContent(ABC):
         assert type(self) == type(other)
 
         return self.add(other)
+
+    @abstractmethod
+    def format(self, args: Iterable[Self]) -> Self:
+        """
+        Uses this content as a template and formats it with the given arguments.
+
+        E.g., 'Hello, {0}!'.format('world') -> 'Hello, world!'
+        """
+        pass

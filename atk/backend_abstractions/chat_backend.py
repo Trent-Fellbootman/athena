@@ -7,10 +7,11 @@ from typing import Iterable
 from dataclasses import dataclass
 from enum import Enum
 
+from .base import AAISAIBackend
 from ..core import AAISThinkingLanguageContent
 
 
-class AAISChatAPI(ABC):
+class AAISChatAPI(AAISAIBackend):
     """
     Abstraction for a chat backend server (e.g., ChatGPT)
     where two parties (prompter & AI) participate in each conversation.
