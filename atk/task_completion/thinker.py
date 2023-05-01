@@ -1,5 +1,6 @@
 from ..core import (
-    AAISProcess, AAISMessagePacket, AAISThinkingLanguageContent
+    AAISProcess, AAISMessagePacket, AAISThinkingLanguageContent,
+    AAISSystemServer
 )
 
 import asyncio
@@ -21,10 +22,10 @@ class AAISMessageSendingOperation:
     messagePacket: AAISMessagePacket
     targetProcessEntries: Iterable[AAISProcess.ReferenceTable.Entry]
 
-    async def performOperation(self) -> AAISMessageSendingOperationResult:
+    async def performOperation(self, systemHandle: AAISSystemServer) -> AAISMessageSendingOperationResult:
         # TODO: is it possible to fail?
         await asyncio.gather(
-            *[self.messagePacket.send(target.referee)
+            *[systemHandle.sendMessage(self.messagePacket, target.refereeAddress)
               for target in self.targetProcessEntries])
 
         return AAISMessageSendingOperationResult(
@@ -133,13 +134,12 @@ class AAISThinkerProcess(AAISProcess, ABC):
         """
         pass
 
-    @staticmethod
     async def executeInterpretedThoughts(
-            interpretedThoughts: ThoughtInterpretationResult.InterpretedThoughts) \
+            self, interpretedThoughts: ThoughtInterpretationResult.InterpretedThoughts) \
             -> AAISThoughtExecutionResult:
 
         operationResults = await asyncio.gather(
-            *[operation.performOperation()
+            *[operation.performOperation(self.systemHandle)
               for operation in interpretedThoughts.messageSendingOperations])
 
         return AAISThoughtExecutionResult(

@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 
 from .thinking_language import AAISThinkingLanguageContent
 from .message import AAISMessagePacket
+from .address import AAISProcessAddress
+from .system_server import AAISSystemServer
 
 
 class AAISProcess(ABC):
@@ -58,13 +60,29 @@ class AAISProcess(ABC):
             context: Context
 
             # the handle to the referenced process
-            referee: "AAISProcess"
+            refereeAddress: AAISProcessAddress
 
         def __init__(self):
             self._entries: Set[AAISProcess.ReferenceTable.Entry] = set()
 
-    def __init__(self):
-        self.referenceTable = self.ReferenceTable()
+    @property
+    def address(self) -> AAISProcessAddress:
+        """
+        The address of the process.
+        """
+        return self._address
+
+    @property
+    def systemHandle(self) -> AAISSystemServer:
+        """
+        The handle to the system server.
+        """
+        return self._systemHandle
+
+    def __init__(self, address: AAISProcessAddress, systemHandle: AAISSystemServer):
+        self._referenceTable: AAISProcess.ReferenceTable = self.ReferenceTable()
+        self._address: AAISProcessAddress = address
+        self._systemHandle: AAISSystemServer = systemHandle
 
     @abstractmethod
     async def handleMessage(self, message: AAISMessagePacket):

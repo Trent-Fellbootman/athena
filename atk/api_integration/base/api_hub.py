@@ -2,15 +2,15 @@ import asyncio
 from dataclasses import dataclass
 from enum import Enum
 from abc import ABC, abstractmethod
-from api_server import AAISAPIServer
-from atk.core import (
-    AAISMessagePacket, AAISThinkingLanguageContent, AAISProcess
-)
-
 from collections import deque
 
+from .api_server import AAISAPIServer
+from ...core import (
+    AAISMessagePacket, AAISThinkingLanguageContent, AAISProcess, AAISSystemServer
+)
 
-class AAISAPIHub(ABC, AAISAPIServer):
+
+class AAISAPIHub(AAISAPIServer, ABC):
     class ErrorType(Enum):
         FAILED_TO_FIND_HANDLER = 0
         EXECUTION_ERROR = 1
@@ -30,6 +30,8 @@ class AAISAPIHub(ABC, AAISAPIServer):
         self._requestQueue.append(asyncio.create_task(self.processMessage(message)))
 
     async def processMessage(self, receivedMessage: AAISMessagePacket):
+        systemHandle: AAISSystemServer = self.systemHandle
+
         match self.determineMessageType(receivedMessage):
             case AAISAPIServer.APIServerMessageType.request:
                 # 1. Update the API call table
@@ -38,7 +40,7 @@ class AAISAPIHub(ABC, AAISAPIServer):
                 new_api_call_entry: AAISAPIServer.APICallTable.Entry = self.apiCallTable.createEntry()
                 # set the fields of the entry
                 new_api_call_entry.summary = await self.summarizeRequest(receivedMessage.content)
-                new_api_call_entry.sender = receivedMessage.header.sender
+                new_api_call_entry.senderAddress = receivedMessage.header.senderAddress
                 new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.UNHANDLED
 
                 # 2. Forward the request to the correct child API server
@@ -56,14 +58,15 @@ class AAISAPIHub(ABC, AAISAPIServer):
 
                         dispatch_message_header = AAISMessagePacket.Header(
                             messageType=AAISMessagePacket.Header.MessageType.communication,
-                            sender=self)
+                            senderAddress=self.address)
 
                         dispatch_packet = AAISMessagePacket(
                             header=dispatch_message_header,
                             content=dispatch_message)
 
                         # send the packet to the child API server
-                        await dispatch_packet.send(handler_match_result.handlerEntry.referee)
+                        await systemHandle.sendMessage(
+                            dispatch_packet, handler_match_result.handlerEntry.refereeAddress)
 
                         new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.RUNNING
 
@@ -79,14 +82,14 @@ class AAISAPIHub(ABC, AAISAPIServer):
                         # make the return packet
                         return_message_header = AAISMessagePacket.Header(
                             messageType=AAISMessagePacket.Header.MessageType.communication,
-                            sender=self)
+                            senderAddress=self.address)
 
                         return_packet = AAISMessagePacket(
                             header=return_message_header,
                             content=error_message)
 
                         # send the return message to the parent
-                        await return_packet.send(receivedMessage.header.sender)
+                        await systemHandle.sendMessage(return_packet, receivedMessage.header.senderAddress)
 
                         new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.FAILURE
 
@@ -119,13 +122,13 @@ class AAISAPIHub(ABC, AAISAPIServer):
 
                         parent_return_header = AAISMessagePacket.Header(
                             messageType=AAISMessagePacket.Header.MessageType.communication,
-                            sender=self)
+                            senderAddress=self.address)
 
                         parent_return_packet = AAISMessagePacket(
                             header=parent_return_header,
                             content=parent_return_message)
 
-                        await parent_return_packet.send(record_match_result.record.sender)
+                        await systemHandle.sendMessage(parent_return_packet, record_match_result.record.senderAddress)
 
                         # TODO: should we remove the record from the API call table?
 

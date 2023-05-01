@@ -1,4 +1,4 @@
-from atk.core import AAISThinkingLanguageContent, AAISProcess
+from atk.core import AAISThinkingLanguageContent, AAISProcess, AAISProcessAddress
 
 from enum import Enum
 from abc import ABC
@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Set, Self
 
 
-class AAISAPIServer(ABC, AAISProcess):
+class AAISAPIServer(AAISProcess, ABC):
 
     class APIServerMessageType(Enum):
         request = 0
@@ -24,10 +24,12 @@ class AAISAPIServer(ABC, AAISProcess):
 
             summary: AAISThinkingLanguageContent
             id: Any  # TODO
-            sender: AAISProcess
+            senderAddress: AAISProcessAddress
             status: APICallStatus
 
-        def __init__(self):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
             self.entries: Set[Self.Entry] = set()
 
         def createEntry(self) -> Entry:
@@ -38,5 +40,7 @@ class AAISAPIServer(ABC, AAISProcess):
 
             # TODO
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
         self.apiCallTable = self.APICallTable()

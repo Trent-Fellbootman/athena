@@ -1,15 +1,15 @@
-from atk.core import (
-    AAISThinkingLanguageContent, AAISMessagePacket,
+from .api_server import AAISAPIServer
+from ...core import (
+    AAISThinkingLanguageContent, AAISMessagePacket, AAISSystemServer
 )
 
-from api_server import AAISAPIServer
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Optional
 
 
-class AAISTerminalAPIServer(ABC, AAISAPIServer):
+class AAISTerminalAPIServer(AAISAPIServer, ABC):
 
     @dataclass
     class ArgumentParseResult:
@@ -55,9 +55,11 @@ class AAISTerminalAPIServer(ABC, AAISAPIServer):
         handles the request.
         """
 
+        systemHandle: AAISSystemServer = self.systemHandle
+
         # create a new entry in the api call table
         new_api_call_entry: AAISAPIServer.APICallTable.Entry = self.apiCallTable.createEntry()
-        new_api_call_entry.sender = request.header.sender
+        new_api_call_entry.senderAddress = request.header.senderAddress
         new_api_call_entry.summary = await self.summarizeRequest(request)
         new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.UNHANDLED
 
@@ -83,14 +85,14 @@ class AAISTerminalAPIServer(ABC, AAISAPIServer):
 
                         return_header = AAISMessagePacket.Header(
                             messageType=AAISMessagePacket.Header.MessageType.communication,
-                            sender=self)
+                            senderAddress=self.address)
 
                         return_packet = AAISMessagePacket(
                             header=return_header,
                             content=return_message)
 
                         # send the packet
-                        await return_packet.send(request.header.sender)
+                        await systemHandle.sendMessage(return_packet, request.header.senderAddress)
 
                     case AAISTerminalAPIServer.APICallResult.ResultType.FAILURE:
                         # Failed to execute the API call
@@ -110,14 +112,14 @@ class AAISTerminalAPIServer(ABC, AAISAPIServer):
                 # make the packet to send back
                 return_header = AAISMessagePacket.Header(
                     messageType=AAISMessagePacket.Header.MessageType.communication,
-                    sender=self)
+                    senderAddress=self)
 
                 return_packet = AAISMessagePacket(
                     header=return_header,
                     content=report_information)
 
                 # send the packet back to the request's sender
-                await return_packet.send(request.header.sender)
+                await systemHandle.sendMessage(return_packet, request.header.senderAddress)
 
     @abstractmethod
     async def makeAPICall(self, arguments: Any) -> APICallResult:
