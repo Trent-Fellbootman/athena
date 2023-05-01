@@ -36,7 +36,7 @@ class AAISThinkingLanguageContent(ABC):
 
     @property
     @abstractmethod
-    async def isEmpty(self) -> bool:
+    def isEmpty(self) -> bool:
         """
         Returns true if the content is empty.
         """
@@ -45,7 +45,7 @@ class AAISThinkingLanguageContent(ABC):
 
     @staticmethod
     @abstractmethod
-    async def makeEmpty() -> Any:
+    def makeEmpty() -> Any:
         """
         Makes empty content of this type.
 
