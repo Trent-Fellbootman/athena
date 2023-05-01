@@ -23,21 +23,37 @@ class AAISText(AAISThinkingLanguageContent):
     def getContent(self) -> str:
         return self._content
 
+    # override
     @property
     def isEmpty(self) -> bool:
         return self._content == ""
 
+    # override
     @staticmethod
     def makeEmpty() -> Any:
         return AAISText("")
 
+    # override
     @staticmethod
     async def translateFrom(content: "AAISThinkingLanguageContent") -> AAISThinkingLanguageTranslationResult:
         # TODO
         raise NotImplementedError()
 
+    # override
     def add(self, other) -> Self:
         return AAISText(self._content + other.content)
 
+    # override
     def format(self, args: Iterable[Self]) -> Self:
         return AAISText(self._content.format(*[arg.content for arg in args]))
+
+    # override
+    def astype(self, targetType: type):
+        if targetType == str:
+            return self._content
+        elif targetType == int:
+            return int(self._content)
+        elif targetType == float:
+            return float(self._content)
+        else:
+            raise TypeError(f"Cannot convert AAISText to {targetType}")

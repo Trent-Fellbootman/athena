@@ -91,3 +91,24 @@ class AAISThinkingLanguageContent(ABC):
         E.g., 'Hello, {0}!'.format('world') -> 'Hello, world!'
         """
         pass
+
+    def join(self, args: Iterable[Self]) -> Self:
+        """
+        Joins the given contents with this content as the separator.
+        """
+
+        args = iter(args)
+        res = next(args)
+
+        for arg in args:
+            res += self + arg
+
+        return res
+
+    @abstractmethod
+    def astype(self, targetType: type):
+        """
+        Casts this content to another type.
+        """
+
+        pass

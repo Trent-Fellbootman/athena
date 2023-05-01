@@ -2,7 +2,7 @@
 Abstraction for a chat backend (e.g., ChatGPT)
 """
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Iterable
 from dataclasses import dataclass
 from enum import Enum

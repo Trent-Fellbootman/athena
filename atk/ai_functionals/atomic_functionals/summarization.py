@@ -1,4 +1,4 @@
-from ..pure_function import AAISPureFunction, inputType
+from ..functional import AAISFunctional, inputType
 from typing import TypeVar
 
 from ...backend_abstractions import AAISAIBackend
@@ -9,7 +9,7 @@ from ...backend_abstractions import AAISChatAPI
 T = TypeVar('T', bound=AAISThinkingLanguageContent)
 
 
-class AAISSummarizer(AAISPureFunction[T, T]):
+class AAISSummarizer(AAISFunctional[T, T]):
     """
     A pure function task that takes in a long content and summarizes it.
     """
@@ -46,7 +46,7 @@ class AAISSummarizer(AAISPureFunction[T, T]):
             raise NotImplementedError(f"Summarization task is not implemented for backend: {type(backend)}")
 
     async def call(self, inputs: inputType)\
-            -> AAISPureFunction.InvocationResult:
+            -> AAISFunctional.InvocationResult:
         if isinstance(self._backend, AAISChatAPI):
             # Format the content to summarize with the template.
             prompt = AAISChatAPI.Message(
@@ -56,7 +56,7 @@ class AAISSummarizer(AAISPureFunction[T, T]):
 
             return_message = await self._backend.generateResponse([prompt])
 
-            return AAISPureFunction.InvocationResult(
+            return AAISFunctional.InvocationResult(
                 success=True,
                 output=return_message.content,
                 errorMessage=None

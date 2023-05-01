@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional, Generic, TypeVar
+from typing import Optional, Generic, TypeVar
 
-from ..backend_abstractions import AAISAIBackend
 from ..core import AAISThinkingLanguageContent
 
 
@@ -10,9 +9,11 @@ inputType = TypeVar('inputType')
 outputType = TypeVar('outputType')
 
 
-class AAISPureFunction(ABC, Generic[inputType, outputType]):
+class AAISFunctional(ABC, Generic[inputType, outputType]):
     """
     A pure function that takes in some input and generates some output.
+
+    The two generic types denote the input & output types.
 
     Note that because of the nature of AIs with deep learning backends
     (e.g., LLMs), this function is only pure in the sense that it does not
