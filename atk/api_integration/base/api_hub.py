@@ -2,8 +2,8 @@ import asyncio
 from dataclasses import dataclass
 from enum import Enum
 from abc import ABC, abstractmethod
-from base import AAISAPIServer
-from ..core import (
+from api_server import AAISAPIServer
+from atk.core import (
     AAISMessagePacket, AAISThinkingLanguageContent, AAISProcess
 )
 
@@ -142,6 +142,10 @@ class AAISAPIHub(ABC, AAISAPIServer):
             -> AAISThinkingLanguageContent:
         """
         Summarizes a request.
+
+        This method is used to create a summary of an API call request
+        which will be used to set the `summary` field of the record in
+        the API call record table.
         """
 
         pass

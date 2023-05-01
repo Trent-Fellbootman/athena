@@ -1,4 +1,4 @@
-from ..core import AAISThinkingLanguageContent, AAISProcess
+from atk.core import AAISThinkingLanguageContent, AAISProcess
 
 from enum import Enum
 from abc import ABC

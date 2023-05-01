@@ -34,8 +34,8 @@ class AAISThinkingLanguageContent(ABC):
     even if they are in different languages semantically.
     """
 
-    @abstractmethod
     @property
+    @abstractmethod
     async def isEmpty(self) -> bool:
         """
         Returns true if the content is empty.
