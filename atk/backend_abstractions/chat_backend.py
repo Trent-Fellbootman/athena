@@ -10,8 +10,14 @@ from enum import Enum
 from .base import AAISAIBackend
 from ..core import AAISThinkingLanguageContent
 
+from typing import TypeVar, Generic
 
-class AAISChatAPI(AAISAIBackend):
+
+prompterType = TypeVar('prompterType', bound=AAISThinkingLanguageContent)
+AIType = TypeVar('AIType', bound=AAISThinkingLanguageContent)
+
+
+class AAISChatAPI(AAISAIBackend, Generic[prompterType, AIType]):
     """
     Abstraction for a chat backend server (e.g., ChatGPT)
     where two parties (prompter & AI) participate in each conversation.
@@ -50,12 +56,14 @@ class AAISChatAPI(AAISAIBackend):
             AI = 1
 
         senderType: SenderType
-        content: AAISThinkingLanguageContent
+        content: prompterType | AIType
 
     @abstractmethod
     async def generateResponse(self, messages: Iterable[Message]) -> Message:
         """
         Generates a response given the message history.
+
+        The generated response will ALWAYS have senderType AI and content type AIType.
         """
 
         pass

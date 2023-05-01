@@ -7,7 +7,7 @@ from ..core import AAISThinkingLanguageContent
 class AAISPromptLookupTable(ABC):
     """
     A table of prompt templates that generates prompts
-    for performing certain tasks. Think of this
+    for performing certain services. Think of this
     as a table of format strings, e.g., "Hello, {}"
 
     All attributes should have type AAISThinkingLanguageContent

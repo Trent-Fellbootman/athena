@@ -1,12 +1,16 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Generic, TypeVar
 
 from ..backend_abstractions import AAISAIBackend
 from ..core import AAISThinkingLanguageContent
 
 
-class AAISPureFunction(ABC):
+inputType = TypeVar('inputType')
+outputType = TypeVar('outputType')
+
+
+class AAISPureFunction(ABC, Generic[inputType, outputType]):
     """
     A pure function that takes in some input and generates some output.
 
@@ -20,11 +24,11 @@ class AAISPureFunction(ABC):
     @dataclass
     class InvocationResult:
         success: bool
-        output: Optional[Any]
+        output: Optional[outputType]
         errorMessage: Optional[AAISThinkingLanguageContent]
 
     @abstractmethod
-    async def call(self, arguments: Any, backend: AAISAIBackend) -> InvocationResult:
+    async def call(self, inputs: inputType) -> InvocationResult:
         """
         Call this function with the given arguments on the given backend.
         """
