@@ -3,10 +3,10 @@ from dataclasses import dataclass
 from enum import Enum
 from abc import ABC, abstractmethod
 from base import AAISAPIServer
-from ..core.core import (
-    AAISMessagePacket, AAISThinkingLanguageContent, AAISMessageHeader,
-    AAISMessageType, AAISReferenceTableEntry
+from ..core import (
+    AAISMessagePacket, AAISThinkingLanguageContent, AAISProcess
 )
+
 from collections import deque
 
 
@@ -54,8 +54,8 @@ class AAISAPIHub(ABC, AAISAPIServer):
                         dispatch_message = await self.formatRequestForChildServer(
                             receivedMessage.content, handler_match_result.handlerEntry)
 
-                        dispatch_message_header = AAISMessageHeader(
-                            messageType=AAISMessageType.communication,
+                        dispatch_message_header = AAISMessagePacket.Header(
+                            messageType=AAISMessagePacket.Header.MessageType.communication,
                             sender=self)
 
                         dispatch_packet = AAISMessagePacket(
@@ -77,8 +77,8 @@ class AAISAPIHub(ABC, AAISAPIServer):
                             errorMessage=handler_match_result.errorMessage)
 
                         # make the return packet
-                        return_message_header = AAISMessageHeader(
-                            messageType=AAISMessageType.communication,
+                        return_message_header = AAISMessagePacket.Header(
+                            messageType=AAISMessagePacket.Header.MessageType.communication,
                             sender=self)
 
                         return_packet = AAISMessagePacket(
@@ -117,8 +117,8 @@ class AAISAPIHub(ABC, AAISAPIServer):
                             returnMessage=receivedMessage.content,
                             context=record_match_result.record)
 
-                        parent_return_header = AAISMessageHeader(
-                            messageType=AAISMessageType.communication,
+                        parent_return_header = AAISMessagePacket.Header(
+                            messageType=AAISMessagePacket.Header.MessageType.communication,
                             sender=self)
 
                         parent_return_packet = AAISMessagePacket(
@@ -163,7 +163,7 @@ class AAISAPIHub(ABC, AAISAPIServer):
             FAILURE = 1
 
         resultType: ResultType
-        handlerEntry: AAISReferenceTableEntry | None
+        handlerEntry: AAISProcess.ReferenceTable.Entry | None
         errorMessage: AAISThinkingLanguageContent | None
 
     @dataclass
@@ -211,7 +211,7 @@ class AAISAPIHub(ABC, AAISAPIServer):
     @abstractmethod
     async def formatRequestForChildServer(
             self, request: AAISThinkingLanguageContent,
-            childServerEntry: AAISReferenceTableEntry) \
+            childServerEntry: AAISProcess.ReferenceTable.Entry) \
             -> AAISThinkingLanguageContent:
         """
         Formats a request for the child server.

@@ -1,6 +1,5 @@
-from ..core.core import (
-    AAISProcess, AAISMessagePacket,
-    AAISThinkingLanguageContent, AAISReferenceTableEntry
+from ..core import (
+    AAISProcess, AAISMessagePacket, AAISThinkingLanguageContent
 )
 
 import asyncio
@@ -13,14 +12,14 @@ from enum import Enum
 @dataclass
 class AAISMessageSendingOperationResult:
     messagePacket: AAISMessagePacket
-    successfulRecipients: Iterable[AAISReferenceTableEntry]
-    failedRecipients: Iterable[AAISReferenceTableEntry]
+    successfulRecipients: Iterable[AAISProcess.ReferenceTable.Entry]
+    failedRecipients: Iterable[AAISProcess.ReferenceTable.Entry]
 
 
 @dataclass
 class AAISMessageSendingOperation:
     messagePacket: AAISMessagePacket
-    targetProcessEntries: Iterable[AAISReferenceTableEntry]
+    targetProcessEntries: Iterable[AAISProcess.ReferenceTable.Entry]
 
     async def performOperation(self) -> AAISMessageSendingOperationResult:
         # TODO: is it possible to fail?

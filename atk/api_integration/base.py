@@ -1,4 +1,4 @@
-from ..core.core import AAISThinkingLanguageContent, AAISProcess
+from ..core import AAISThinkingLanguageContent, AAISProcess
 
 from enum import Enum
 from abc import ABC

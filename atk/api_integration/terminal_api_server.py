@@ -1,6 +1,5 @@
-from ..core.core import (
+from ..core import (
     AAISThinkingLanguageContent, AAISMessagePacket,
-    AAISMessageHeader, AAISMessageType
 )
 
 from base import AAISAPIServer
@@ -82,8 +81,8 @@ class AAISTerminalAPIServer(ABC, AAISAPIServer):
                         # make the packet to send back
                         return_message = await self.formatAPICallReportInformation(call_result.reportInformation)
 
-                        return_header = AAISMessageHeader(
-                            messageType=AAISMessageType.communication,
+                        return_header = AAISMessagePacket.Header(
+                            messageType=AAISMessagePacket.Header.MessageType.communication,
                             sender=self)
 
                         return_packet = AAISMessagePacket(
@@ -109,8 +108,8 @@ class AAISTerminalAPIServer(ABC, AAISAPIServer):
                     parseResult.errorMessage, AAISTerminalAPIServer.ErrorType.INVALID_ARGUMENTS)
 
                 # make the packet to send back
-                return_header = AAISMessageHeader(
-                    messageType=AAISMessageType.communication,
+                return_header = AAISMessagePacket.Header(
+                    messageType=AAISMessagePacket.Header.MessageType.communication,
                     sender=self)
 
                 return_packet = AAISMessagePacket(

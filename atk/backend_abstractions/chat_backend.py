@@ -3,11 +3,11 @@ Abstraction for a chat backend (e.g., ChatGPT)
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Iterable, Optional, Self
+from typing import Iterable
 from dataclasses import dataclass
 from enum import Enum
 
-from ..core.core import AAISThinkingLanguageContent
+from ..core import AAISThinkingLanguageContent
 
 
 class AAISChatAPI(ABC):
