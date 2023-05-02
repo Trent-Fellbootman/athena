@@ -9,14 +9,24 @@ from ...backend_abstractions import AAISChatAPI
 T = TypeVar('T', bound=AAISThinkingLanguageContent)
 
 
-class AAISSummarizer(AAISFunctional[T, T]):
+class AAISTransformer(AAISFunctional[T, T]):
     """
-    A pure function task that takes in a long content and summarizes it.
+    A functional that transforms the input to produce output.
+
+    This "Transformer" is NOT the "Transformer" in "Attention is All You Need"
+    (For those who haven't read the paper: "Attention is All You Need" is the
+    paper that proposed the transformer architecture, the backbone of many
+    LLMs, such as ChatGPT).
+
+    Both the input and output are a single AAISThinkingLanguageContent.
+
+    The "transformer" functional can represent a wide range of tasks, e.g.,
+    summarization, translation, code production, planning, etc.
     """
 
     def __init__(self, backend: AAISAIBackend, **kwargs):
         """
-        Initialize this summarization task with the given backend.
+        Create a transformer functional with the given backend.
 
         Args:
             backend: The backend to use for this summarization task.
@@ -25,13 +35,16 @@ class AAISSummarizer(AAISFunctional[T, T]):
 
                 For AAISChatBackend, the only additional argument is
                 `template`, which will be used to format the content
-                to summarize when the summarizer is called.
+                in order to produce the prompt.
 
                 An example `template` is:
 
                 "The user has made an API call request. The request is: {0}.
                 Summarize the request and return the summary.
                 Output the summary ONLY and NOTHING ELSE."
+
+                By applying this template, the constructed functional is
+                effectively a summarizer.
         """
 
         if isinstance(backend, AAISChatAPI):
@@ -43,7 +56,7 @@ class AAISSummarizer(AAISFunctional[T, T]):
                 case template:
                     self._template: T = template
         else:
-            raise NotImplementedError(f"Summarization task is not implemented for backend: {type(backend)}")
+            raise NotImplementedError(f"Transformer functional is not implemented for backend: {type(backend)}")
 
     async def call(self, inputs: inputType)\
             -> AAISFunctional.InvocationResult:
@@ -62,4 +75,4 @@ class AAISSummarizer(AAISFunctional[T, T]):
                 errorMessage=None
             )
         else:
-            raise NotImplementedError(f"Summarization task is not implemented for backend: {type(self._backend)}")
+            raise NotImplementedError(f"Transformer functional is not implemented for backend: {type(self._backend)}")

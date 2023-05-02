@@ -1,28 +1,69 @@
-from ..base import AAISAPIHub
 from dataclasses import dataclass
-from ...core import AAISThinkingLanguageContent
-from ...prompting.prompt_lookup_table import AAISPromptLookupTable
+from typing import TypeVar
+
+from ..base import AAISAPIHub, AAISAPIServer
+from ...core import AAISThinkingLanguageContent, AAISProcess, AAISMessagePacket
+from ...functional import AAISFunctional
 
 
-class AAISAPIHubWithChatBackend(AAISAPIHub):
+T = TypeVar('T', bound=AAISThinkingLanguageContent)
+
+
+class AAISAPIHubWithFunctionalBackend(AAISAPIHub):
     """
     A specialized API hub that achieves its functionality
-    intelligently with a chat backend (e.g., ChatGPT).
+    intelligently with a set of functionals.
     """
 
     @dataclass
-    class PromptLookupTable(AAISPromptLookupTable):
+    class FunctionalTable:
         """
-        A table of prompts to use for performing
+        A table of functionals to use for performing
         API hub-related operations with the chat backend.
 
         Attributes:
-            requestSummarizationPromptTemplate:
-                This template is used to create a prompt which is then
-                fed into the chat API to create a summarization of the request.
+            summarizer: The summarizer to use for summarizing requests.
         """
 
-        requestSummarizationPromptTemplate: AAISThinkingLanguageContent
+        summarizer: AAISFunctional[T, T]
+        messageTypeDeterminer: AAISFunctional[AAISMessagePacket, AAISAPIServer.APIServerMessageType]
+
+    # override
+    async def determineMessageType(self, message: AAISMessagePacket) -> AAISAPIServer.APIServerMessageType:
+        pass
+
+    # override
+    async def selectHandler(self, request: AAISThinkingLanguageContent) -> AAISAPIHub.ServerHandlerMatchResult:
+        pass
+
+    # override
+    async def matchReturnMessageWithAPICallRecord(
+            self, returnMessage: AAISMessagePacket) -> AAISAPIHub.ReturnMessageEntryMatchResult:
+        pass
+
+    # override
+    async def formatErrorMessage(
+            self, errorType: AAISAPIHub.ErrorType, errorMessage: AAISThinkingLanguageContent)\
+            -> AAISThinkingLanguageContent:
+        pass
+
+    # override
+    async def formatRequestForChildServer(
+            self, request: AAISThinkingLanguageContent, childServerEntry: AAISProcess.ReferenceTable.Entry)\
+            -> AAISThinkingLanguageContent:
+        pass
+
+    # override
+    async def formatReturnMessageForParent(
+            self, returnMessage: AAISThinkingLanguageContent, context: AAISAPIServer.APICallTable.Entry)\
+            -> AAISThinkingLanguageContent:
+        pass
+
+    # override
+    async def determineAPICallReturnResultType(
+            self, returnMessage: AAISThinkingLanguageContent, context: AAISAPIServer.APICallTable.Entry)\
+            -> AAISAPIHub.APICallReturnResultType:
+        pass
 
     # override
     async def summarizeRequest(self, requestMessage: AAISThinkingLanguageContent) \

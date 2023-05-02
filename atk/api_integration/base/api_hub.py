@@ -49,7 +49,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
                 handler_match_result = await self.selectHandler(receivedMessage.content)
 
                 match handler_match_result.resultType:
-                    case AAISAPIHub.APIHubServerHandlerMatchResult.ResultType.SUCCESS:
+                    case AAISAPIHub.ServerHandlerMatchResult.ResultType.SUCCESS:
                         assert handler_match_result.handlerEntry is not None
 
                         # send the request to the child API server
@@ -70,7 +70,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
 
                         new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.RUNNING
 
-                    case AAISAPIHub.APIHubServerHandlerMatchResult.ResultType.FAILURE:
+                    case AAISAPIHub.ServerHandlerMatchResult.ResultType.FAILURE:
                         # failed to find handler
                         assert handler_match_result.errorMessage is not None
 
@@ -98,7 +98,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
                 record_match_result = await self.matchReturnMessageWithAPICallRecord(receivedMessage)
 
                 match record_match_result.resultType:
-                    case AAISAPIHub.APIHubReturnMessageEntryMatchResult.ResultType.SUCCESS:
+                    case AAISAPIHub.ReturnMessageEntryMatchResult.ResultType.SUCCESS:
                         # successfully found the record
                         # TODO: Add error handling for these. Mismatch is always possible.
                         assert record_match_result.record is not None
@@ -132,7 +132,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
 
                         # TODO: should we remove the record from the API call table?
 
-                    case AAISAPIHub.APIHubReturnMessageEntryMatchResult.ResultType.FAILURE:
+                    case AAISAPIHub.ReturnMessageEntryMatchResult.ResultType.FAILURE:
                         # Failed to find record matching the return message
                         # TODO: what should we do here?
                         assert record_match_result.errorMessage is not None
@@ -163,7 +163,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
         pass
 
     @dataclass
-    class APIHubServerHandlerMatchResult:
+    class ServerHandlerMatchResult:
 
         class ResultType(Enum):
             SUCCESS = 0
@@ -174,7 +174,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
         errorMessage: AAISThinkingLanguageContent | None
 
     @dataclass
-    class APIHubReturnMessageEntryMatchResult:
+    class ReturnMessageEntryMatchResult:
 
         class ResultType(Enum):
             SUCCESS = 0
@@ -186,7 +186,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
 
     @abstractmethod
     async def selectHandler(self, request: AAISThinkingLanguageContent) \
-            -> APIHubServerHandlerMatchResult:
+            -> ServerHandlerMatchResult:
         """
         Determines the correct child API server to call for `request`.
         """
@@ -196,7 +196,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
     @abstractmethod
     async def matchReturnMessageWithAPICallRecord(
             self, returnMessage: AAISMessagePacket) \
-            -> APIHubReturnMessageEntryMatchResult:
+            -> ReturnMessageEntryMatchResult:
         """
         Matches a return message with an API call record.
         """
