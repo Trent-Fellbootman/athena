@@ -40,7 +40,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
 
         if message_type_result.success:
             match message_type_result.value:
-                case AAISAPIServer.APIServerMessageType.request:
+                case AAISAPIServer.APIServerMessageType.REQUEST:
                     # 1. Update the API call table
 
                     # make new ID and create entry
@@ -99,7 +99,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
 
                         new_api_call_entry.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.FAILURE
 
-                case AAISAPIServer.APIServerMessageType.returnMessage:
+                case AAISAPIServer.APIServerMessageType.RETURN_MESSAGE:
                     # 1. Find the corresponding record in the API call table
                     record_match_result = await self.matchReturnMessageWithAPICallRecord(receivedMessage)
 

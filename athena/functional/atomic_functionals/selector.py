@@ -58,7 +58,7 @@ class AAISSelector(AAISFunctional[Tuple[Collection[T], T], int]):
         in this template: slot 0 for the choices and slot 1 for the requirement.
 
         - `item_formatter`: A callable used to format each of the choices.
-        The input to this callable is <index, item>, where <index>: `int` is the index
+        The input to this callable is <index, item>, where <index>: `int` is the index (0-based)
         of the item among the choices, and item is the choice, in thinking language.
 
         - `separator`: the separator to insert between two choices.
@@ -81,14 +81,13 @@ class AAISSelector(AAISFunctional[Tuple[Collection[T], T], int]):
 
         Then the generated prompt would be like this:
 
-        "
-        There are several available APIs. Their functionalities are described as follows:
+        "There are several available APIs. Their functionalities are described as follows:
 
-        API 1: Text to image.
+        API 0: Text to image.
 
-        API 2: Image to text.
+        API 1: Image to text.
 
-        API 3: Web browser.
+        API 2: Web browser.
 
         Now, the user has made an API request. The request is as follows:
 

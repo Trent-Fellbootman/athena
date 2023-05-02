@@ -38,7 +38,7 @@ class AAISAPIHubWithFunctionalBackend(AAISAPIHub, Generic[T]):
                 being an API call request or a report message from a child API server.
 
             handlerSelector:
-                A functional that selects a handler for a request.
+                A functional that selects the correct child API handler for a request.
                 Inputs to this functional are the description of each process
                 that the API hub server has reference to (arg 0), as well as
                 the request message (arg 1); output is the index of the handler

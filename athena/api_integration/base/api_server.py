@@ -11,8 +11,8 @@ from typing import Any, Set, Self
 class AAISAPIServer(AAISProcess, ABC):
 
     class APIServerMessageType(Enum):
-        request = 0
-        returnMessage = 1
+        REQUEST = 0
+        RETURN_MESSAGE = 1
 
     class APICallRecordTable:
 

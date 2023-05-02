@@ -20,7 +20,7 @@ class AAISText(AAISThinkingLanguageContent):
         self._content = content
 
     @property
-    def getContent(self) -> str:
+    def content(self) -> str:
         return self._content
 
     # override
