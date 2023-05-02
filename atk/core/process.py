@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Set
+from typing import Set, Iterable
 from abc import ABC, abstractmethod
 
 from .thinking_language import AAISThinkingLanguageContent
@@ -64,6 +64,14 @@ class AAISProcess(ABC):
 
         def __init__(self):
             self._entries: Set[AAISProcess.ReferenceTable.Entry] = set()
+
+        @property
+        def entries(self) -> Iterable[Entry]:
+            return self._entries
+
+        @property
+        def entryCount(self) -> int:
+            return len(self._entries)
 
     @property
     def address(self) -> AAISProcessAddress:

@@ -59,15 +59,15 @@ class AAISSupervisedFunctional(AAISFunctional):
             return worker_result
 
         # validate the worker's return
-        supervisor_result = await self._supervisor.call(worker_result.output)
+        supervisor_result = await self._supervisor.call(worker_result.value)
         if not supervisor_result.success:
             return supervisor_result
 
-        if not supervisor_result.output:
+        if not supervisor_result.value:
             # worker's return is invalid
             return AAISResult(
                 success=False,
-                output=None,
+                value=None,
                 # we don't actually need the error message here;
                 # we provide a non-None error message just to avoid
                 # potential type checking
@@ -85,5 +85,5 @@ class AAISSupervisedFunctional(AAISFunctional):
 
         return AAISResult(
             success=False,
-            output=None,
+            value=None,
             errorMessage=self._errorMessage)

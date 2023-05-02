@@ -55,7 +55,7 @@ class AAISSequentialFunctional(AAISFunctional[T, U]):
             if not result.success:
                 return result
 
-            x = result.output
+            x = result.value
 
         return AAISResult(
-            success=True, output=x, errorMessage=None)
+            success=True, value=x, errorMessage=None)

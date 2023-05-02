@@ -137,18 +137,18 @@ class AAISSelector(AAISFunctional[Tuple[Collection[T], T], int]):
                 # a choice is selected or not
                 selected_index = response.content.astype(int)
 
-                if not (selected_index == -1 or selected_index in range(len(choices))):
+                if not (selected_index == -1 or (0 <= selected_index < len(choices))):
                     raise ValueError(f"Invalid index {selected_index} returned by the backend!")
 
                 return AAISResult(
                     success=True,
-                    output=selected_index,
+                    value=selected_index,
                     errorMessage=None
                 )
 
             except ValueError:
                 return AAISResult(
                     success=False,
-                    output=None,
+                    value=None,
                     errorMessage=self._error_message
                 )

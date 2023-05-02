@@ -71,7 +71,7 @@ class AAISTransformer(AAISFunctional[T, T]):
 
             return AAISResult(
                 success=True,
-                output=return_message.content,
+                value=return_message.content,
                 errorMessage=None
             )
         else:

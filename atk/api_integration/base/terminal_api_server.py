@@ -58,10 +58,10 @@ class AAISTerminalAPIServer(AAISAPIServer, ABC):
         systemHandle: AAISSystemServer = self.systemHandle
 
         # create a new entry in the api call table
-        new_api_call_entry: AAISAPIServer.APICallTable.Entry = self.apiCallTable.createEntry()
+        new_api_call_entry: AAISAPIServer.APICallRecordTable.Record = self._apiCallRecords.createEntry()
         new_api_call_entry.senderAddress = request.header.senderAddress
-        new_api_call_entry.summary = await self.summarizeRequest(request)
-        new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.UNHANDLED
+        new_api_call_entry.description = await self.summarizeRequest(request)
+        new_api_call_entry.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.UNHANDLED
 
         # parse the arguments
         parseResult = await self.parseArguments(request.content)
@@ -78,7 +78,7 @@ class AAISTerminalAPIServer(AAISAPIServer, ABC):
                         # Successfully executed the API call
                         assert call_result.reportInformation is not None
 
-                        new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.SUCCESS
+                        new_api_call_entry.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.SUCCESS
 
                         # make the packet to send back
                         return_message = await self.formatAPICallReportInformation(call_result.reportInformation)
@@ -98,13 +98,13 @@ class AAISTerminalAPIServer(AAISAPIServer, ABC):
                         # Failed to execute the API call
                         assert call_result.errorMessage is not None
 
-                        new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.FAILURE
+                        new_api_call_entry.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.FAILURE
                         pass
 
             case AAISTerminalAPIServer.ArgumentParseResult.ResultType.FAILURE:
                 # Failed to parse the arguments
 
-                new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.FAILURE
+                new_api_call_entry.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.FAILURE
 
                 report_information = await self.formatErrorMessage(
                     parseResult.errorMessage, AAISTerminalAPIServer.ErrorType.INVALID_ARGUMENTS)

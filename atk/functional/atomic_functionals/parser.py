@@ -116,7 +116,7 @@ class AAISParser(AAISFunctional[T, Collection[T]]):
 
                 return AAISResult(
                     success=True,
-                    output=parsed_items,
+                    value=parsed_items,
                     errorMessage=None
                 )
 

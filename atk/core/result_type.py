@@ -6,7 +6,7 @@ U = TypeVar('U')
 
 
 @dataclass
-class AAISResult(Generic[T]):
+class AAISResult(Generic[T, U]):
     """
     Represents the result of an operation.
 
@@ -16,5 +16,5 @@ class AAISResult(Generic[T]):
     """
 
     success: bool
-    output: Optional[T]
+    value: Optional[T]
     errorMessage: Optional[U]

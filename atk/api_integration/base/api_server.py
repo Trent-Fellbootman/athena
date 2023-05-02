@@ -14,17 +14,17 @@ class AAISAPIServer(AAISProcess, ABC):
         request = 0
         returnMessage = 1
 
-    class APICallTable:
+    class APICallRecordTable:
 
         @dataclass
-        class Entry:
+        class Record:
             class APICallStatus(Enum):
                 UNHANDLED = 0
                 RUNNING = 1
                 SUCCESS = 2
                 FAILURE = 3
 
-            summary: AAISThinkingLanguageContent
+            description: AAISThinkingLanguageContent
             id: Any  # TODO
             senderAddress: AAISProcessAddress
             status: APICallStatus
@@ -32,9 +32,13 @@ class AAISAPIServer(AAISProcess, ABC):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
 
-            self.entries: Set[Self.Entry] = set()
+            self._records: Set[AAISAPIServer.APICallRecordTable.Record] = set()
 
-        def createEntry(self) -> Entry:
+        @property
+        def records(self) -> Set[Record]:
+            return self._records
+
+        def createEntry(self) -> Record:
             """
             Generates a new ID, creates an entry with the ID,
             adds the entry to the table, and returns the reference to the entry.
@@ -45,4 +49,8 @@ class AAISAPIServer(AAISProcess, ABC):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.apiCallTable = self.APICallTable()
+        self._apiCallRecords = self.APICallRecordTable()
+
+    @property
+    def apiCallRecordTable(self) -> APICallRecordTable:
+        return self._apiCallRecords

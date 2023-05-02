@@ -1,5 +1,5 @@
-from .api_hub_with_chat_backend import AAISAPIHubWithChatBackend
+from .api_hub_with_functional_backend import AAISAPIHubWithFunctionalBackend
 
 __all__ = [
-    "AAISAPIHubWithChatBackend",
+    "AAISAPIHubWithFunctionalBackend",
 ]

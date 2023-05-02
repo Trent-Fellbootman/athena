@@ -29,6 +29,6 @@ class AAISLambda(AAISFunctional[T, U]):
     async def call(self, inputs: T) -> AAISResult[U, AAISThinkingLanguageContent]:
         return AAISResult(
             success=True,
-            output=self._function(inputs),
+            value=self._function(inputs),
             errorMessage=None
         )
