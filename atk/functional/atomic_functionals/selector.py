@@ -1,7 +1,7 @@
 from typing import TypeVar, Collection, Tuple
 
 from ..functional import AAISFunctional
-from ...core import AAISThinkingLanguageContent
+from ...core import AAISThinkingLanguageContent, AAISResult
 from ...backend_abstractions import AAISAIBackend, AAISChatAPI
 
 
@@ -124,7 +124,7 @@ class AAISSelector(AAISFunctional[Tuple[Collection[T], T], int]):
         else:
             raise NotImplementedError(f"Backend {backend} is not supported!")
 
-    async def call(self, inputs: Tuple[Collection[T], T]) -> AAISFunctional.InvocationResult:
+    async def call(self, inputs: Tuple[Collection[T], T]) -> AAISResult[int, AAISThinkingLanguageContent]:
         if isinstance(self._backend, AAISChatAPI):
             choices, requirement = inputs
 
@@ -140,14 +140,14 @@ class AAISSelector(AAISFunctional[Tuple[Collection[T], T], int]):
                 if not (selected_index == -1 or selected_index in range(len(choices))):
                     raise ValueError(f"Invalid index {selected_index} returned by the backend!")
 
-                return AAISFunctional.InvocationResult(
+                return AAISResult(
                     success=True,
                     output=selected_index,
                     errorMessage=None
                 )
 
             except ValueError:
-                return AAISFunctional.InvocationResult(
+                return AAISResult(
                     success=False,
                     output=None,
                     errorMessage=self._error_message

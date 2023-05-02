@@ -1,5 +1,5 @@
-from ..functional import AAISFunctional, inputType
-from ...core import AAISThinkingLanguageContent
+from ..functional import AAISFunctional
+from ...core import AAISThinkingLanguageContent, AAISResult
 from ...backend_abstractions import AAISAIBackend, AAISChatAPI
 
 from typing import TypeVar, Collection
@@ -88,7 +88,7 @@ class AAISParser(AAISFunctional[T, Collection[T]]):
         else:
             raise NotImplementedError(f"AI backend {backend} is not supported for this functional!")
 
-    async def call(self, inputs: inputType) -> AAISFunctional.InvocationResult:
+    async def call(self, inputs: T) -> AAISResult[Collection[T], AAISThinkingLanguageContent]:
         if isinstance(self._backend, AAISChatAPI):
             current_argument_index = 0
             message_history = []
@@ -114,7 +114,7 @@ class AAISParser(AAISFunctional[T, Collection[T]]):
 
                 message_history.append(new_prompt)
 
-                return AAISFunctional.InvocationResult(
+                return AAISResult(
                     success=True,
                     output=parsed_items,
                     errorMessage=None

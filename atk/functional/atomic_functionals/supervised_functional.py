@@ -1,7 +1,7 @@
-from ..functional import AAISFunctional, inputType
-from ...core import AAISThinkingLanguageContent
+from ..functional import AAISFunctional
+from ...core import AAISThinkingLanguageContent, AAISResult
 
-from typing import TypeVar, Collection
+from typing import TypeVar
 
 
 T = TypeVar('T')
@@ -42,7 +42,7 @@ class AAISSupervisedFunctional(AAISFunctional):
         self._maxTries = maxTries
         self._errorMessage = errorMessage
 
-    async def tryCallAndValidate(self, inputs: inputType) -> AAISFunctional.InvocationResult:
+    async def tryCallAndValidate(self, inputs: T) -> AAISResult[U, AAISThinkingLanguageContent]:
         """
         Try calling the worker and validate its results.
 
@@ -65,7 +65,7 @@ class AAISSupervisedFunctional(AAISFunctional):
 
         if not supervisor_result.output:
             # worker's return is invalid
-            return AAISFunctional.InvocationResult(
+            return AAISResult(
                 success=False,
                 output=None,
                 # we don't actually need the error message here;
@@ -77,13 +77,13 @@ class AAISSupervisedFunctional(AAISFunctional):
         return worker_result
 
     # override
-    async def call(self, inputs: inputType) -> AAISFunctional.InvocationResult:
+    async def call(self, inputs: T) -> AAISResult[U, AAISThinkingLanguageContent]:
         for i in range(self._maxTries):
             result = await self.tryCallAndValidate(inputs)
             if result.success:
                 return result
 
-        return AAISFunctional.InvocationResult(
+        return AAISResult(
             success=False,
             output=None,
             errorMessage=self._errorMessage)

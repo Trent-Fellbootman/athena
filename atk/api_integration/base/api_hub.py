@@ -1,19 +1,21 @@
 import asyncio
-from dataclasses import dataclass
 from enum import Enum
 from abc import ABC, abstractmethod
 from collections import deque
+from typing import Optional
 
 from .api_server import AAISAPIServer
 from ...core import (
-    AAISMessagePacket, AAISThinkingLanguageContent, AAISProcess, AAISSystemServer
+    AAISMessagePacket, AAISThinkingLanguageContent, AAISProcess,
+    AAISSystemServer, AAISResult
 )
 
 
 class AAISAPIHub(AAISAPIServer, ABC):
     class ErrorType(Enum):
-        FAILED_TO_FIND_HANDLER = 0
-        EXECUTION_ERROR = 1
+        FAILED_TO_DETERMINE_MESSAGE_TYPE = 0
+        FAILED_TO_FIND_HANDLER = 1
+        EXECUTION_ERROR = 2
 
     def __init__(self):
         super().__init__()
@@ -32,29 +34,33 @@ class AAISAPIHub(AAISAPIServer, ABC):
     async def processMessage(self, receivedMessage: AAISMessagePacket):
         systemHandle: AAISSystemServer = self.systemHandle
 
-        match self.determineMessageType(receivedMessage):
-            case AAISAPIServer.APIServerMessageType.request:
-                # 1. Update the API call table
+        message_type_result = await self.determineMessageType(receivedMessage)
 
-                # make new ID and create entry
-                new_api_call_entry: AAISAPIServer.APICallTable.Entry = self.apiCallTable.createEntry()
-                # set the fields of the entry
-                new_api_call_entry.summary = await self.summarizeRequest(receivedMessage.content)
-                new_api_call_entry.senderAddress = receivedMessage.header.senderAddress
-                new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.UNHANDLED
+        if message_type_result.success:
+            match message_type_result.output:
+                case AAISAPIServer.APIServerMessageType.request:
+                    # 1. Update the API call table
 
-                # 2. Forward the request to the correct child API server
+                    # make new ID and create entry
+                    new_api_call_entry: AAISAPIServer.APICallTable.Entry = self.apiCallTable.createEntry()
+                    # set the fields of the entry
+                    new_api_call_entry.summary = await self.summarizeRequest(receivedMessage.content)
+                    new_api_call_entry.senderAddress = receivedMessage.header.senderAddress
+                    new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.UNHANDLED
 
-                # find the child API server to call
-                handler_match_result = await self.selectHandler(receivedMessage.content)
+                    # 2. Forward the request to the correct child API server
 
-                match handler_match_result.resultType:
-                    case AAISAPIHub.ServerHandlerMatchResult.ResultType.SUCCESS:
-                        assert handler_match_result.handlerEntry is not None
+                    # find the child API server to call
+                    handler_match_result = await self.selectHandler(receivedMessage.content)
+
+                    if handler_match_result.success:
+                        assert handler_match_result.output is not None
+
+                        handler_entry = handler_match_result.output
 
                         # send the request to the child API server
                         dispatch_message = await self.formatRequestForChildServer(
-                            receivedMessage.content, handler_match_result.handlerEntry)
+                            receivedMessage.content, handler_entry)
 
                         dispatch_message_header = AAISMessagePacket.Header(
                             messageType=AAISMessagePacket.Header.MessageType.communication,
@@ -66,11 +72,11 @@ class AAISAPIHub(AAISAPIServer, ABC):
 
                         # send the packet to the child API server
                         await systemHandle.sendMessage(
-                            dispatch_packet, handler_match_result.handlerEntry.refereeAddress)
+                            dispatch_packet, handler_entry.refereeAddress)
 
                         new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.RUNNING
 
-                    case AAISAPIHub.ServerHandlerMatchResult.ResultType.FAILURE:
+                    else:
                         # failed to find handler
                         assert handler_match_result.errorMessage is not None
 
@@ -93,32 +99,35 @@ class AAISAPIHub(AAISAPIServer, ABC):
 
                         new_api_call_entry.status = AAISAPIServer.APICallTable.Entry.APICallStatus.FAILURE
 
-            case AAISAPIServer.APIServerMessageType.returnMessage:
-                # 1. Find the corresponding record in the API call table
-                record_match_result = await self.matchReturnMessageWithAPICallRecord(receivedMessage)
+                case AAISAPIServer.APIServerMessageType.returnMessage:
+                    # 1. Find the corresponding record in the API call table
+                    record_match_result = await self.matchReturnMessageWithAPICallRecord(receivedMessage)
 
-                match record_match_result.resultType:
-                    case AAISAPIHub.ReturnMessageEntryMatchResult.ResultType.SUCCESS:
+                    if record_match_result.success:
                         # successfully found the record
-                        # TODO: Add error handling for these. Mismatch is always possible.
-                        assert record_match_result.record is not None
-                        assert record_match_result.record.status == \
+                        # TODO: Add error handling for these.
+                        #  Mismatch is always possible.
+
+                        assert record_match_result.output is not None
+                        record = record_match_result.output
+
+                        assert record.status == \
                                AAISAPIServer.APICallTable.Entry.APICallStatus.RUNNING
 
                         # update the status of the record
                         match await self.determineAPICallReturnResultType(
-                                receivedMessage.content, record_match_result.record):
+                                receivedMessage.content, record):
                             case AAISAPIHub.APICallReturnResultType.SUCCESS:
-                                record_match_result.record.status = \
+                                record.status = \
                                     AAISAPIServer.APICallTable.Entry.APICallStatus.SUCCESS
                             case AAISAPIHub.APICallReturnResultType.FAILURE:
-                                record_match_result.record.status = \
+                                record.status = \
                                     AAISAPIServer.APICallTable.Entry.APICallStatus.FAILURE
 
                         # send the return message to the parent
                         parent_return_message = await self.formatReturnMessageForParent(
                             returnMessage=receivedMessage.content,
-                            context=record_match_result.record)
+                            context=record)
 
                         parent_return_header = AAISMessagePacket.Header(
                             messageType=AAISMessagePacket.Header.MessageType.communication,
@@ -128,17 +137,32 @@ class AAISAPIHub(AAISAPIServer, ABC):
                             header=parent_return_header,
                             content=parent_return_message)
 
-                        await systemHandle.sendMessage(parent_return_packet, record_match_result.record.senderAddress)
+                        await systemHandle.sendMessage(parent_return_packet, record.senderAddress)
 
                         # TODO: should we remove the record from the API call table?
 
-                    case AAISAPIHub.ReturnMessageEntryMatchResult.ResultType.FAILURE:
+                    else:
                         # Failed to find record matching the return message
                         # TODO: what should we do here?
                         assert record_match_result.errorMessage is not None
                         pass
+        else:
+            # failed to determine message's type;
+            # send an error message to sender of the message
+            return_message = await self.formatErrorMessage(
+                errorType=AAISAPIHub.ErrorType.FAILED_TO_DETERMINE_MESSAGE_TYPE,
+                errorMessage=None
+            )
 
-                pass
+            return_message_header = AAISMessagePacket.Header(
+                messageType=AAISMessagePacket.Header.MessageType.communication,
+                senderAddress=self.address)
+
+            return_packet = AAISMessagePacket(
+                header=return_message_header,
+                content=return_message)
+
+            await systemHandle.sendMessage(return_packet, receivedMessage.header.senderAddress)
 
     @abstractmethod
     async def summarizeRequest(self, requestMessage: AAISThinkingLanguageContent) \
@@ -155,38 +179,16 @@ class AAISAPIHub(AAISAPIServer, ABC):
 
     @abstractmethod
     async def determineMessageType(self, message: AAISMessagePacket) \
-            -> AAISAPIServer.APIServerMessageType:
+            -> AAISResult[AAISAPIServer.APIServerMessageType, AAISThinkingLanguageContent]:
         """
         Determines the type of `message`.
         """
 
         pass
 
-    @dataclass
-    class ServerHandlerMatchResult:
-
-        class ResultType(Enum):
-            SUCCESS = 0
-            FAILURE = 1
-
-        resultType: ResultType
-        handlerEntry: AAISProcess.ReferenceTable.Entry | None
-        errorMessage: AAISThinkingLanguageContent | None
-
-    @dataclass
-    class ReturnMessageEntryMatchResult:
-
-        class ResultType(Enum):
-            SUCCESS = 0
-            FAILURE = 1
-
-        resultType: ResultType
-        record: AAISAPIServer.APICallTable.Entry | None
-        errorMessage: AAISThinkingLanguageContent | None
-
     @abstractmethod
     async def selectHandler(self, request: AAISThinkingLanguageContent) \
-            -> ServerHandlerMatchResult:
+            -> AAISResult[AAISProcess.ReferenceTable.Entry, AAISThinkingLanguageContent]:
         """
         Determines the correct child API server to call for `request`.
         """
@@ -196,7 +198,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
     @abstractmethod
     async def matchReturnMessageWithAPICallRecord(
             self, returnMessage: AAISMessagePacket) \
-            -> ReturnMessageEntryMatchResult:
+            -> AAISResult[AAISAPIServer.APICallTable.Entry, AAISThinkingLanguageContent]:
         """
         Matches a return message with an API call record.
         """
@@ -204,7 +206,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
         pass
 
     @abstractmethod
-    async def formatErrorMessage(self, errorType: ErrorType, errorMessage: AAISThinkingLanguageContent) \
+    async def formatErrorMessage(self, errorType: ErrorType, errorMessage: Optional[AAISThinkingLanguageContent]) \
             -> AAISThinkingLanguageContent:
         """
         Formats an error message.

@@ -1,4 +1,5 @@
 from ..functional import AAISFunctional
+from ...core import AAISThinkingLanguageContent, AAISResult
 
 from typing import TypeVar, Collection
 
@@ -35,7 +36,7 @@ class AAISSequentialFunctional(AAISFunctional[T, U]):
         self._functionals = functionals
 
     # override
-    async def call(self, inputs: T) -> AAISFunctional.InvocationResult:
+    async def call(self, inputs: T) -> AAISResult[U, AAISThinkingLanguageContent]:
         """
         Apply the functionals in sequence to the input.
 
@@ -56,5 +57,5 @@ class AAISSequentialFunctional(AAISFunctional[T, U]):
 
             x = result.output
 
-        return AAISFunctional.InvocationResult(
+        return AAISResult(
             success=True, output=x, errorMessage=None)

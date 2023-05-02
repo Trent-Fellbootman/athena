@@ -2,7 +2,7 @@ from ..functional import AAISFunctional, inputType
 from typing import TypeVar
 
 from ...backend_abstractions import AAISAIBackend
-from ...core import AAISThinkingLanguageContent
+from ...core import AAISThinkingLanguageContent, AAISResult
 from ...backend_abstractions import AAISChatAPI
 
 
@@ -59,7 +59,7 @@ class AAISTransformer(AAISFunctional[T, T]):
             raise NotImplementedError(f"Transformer functional is not implemented for backend: {type(backend)}")
 
     async def call(self, inputs: inputType)\
-            -> AAISFunctional.InvocationResult:
+            -> AAISResult[T, AAISThinkingLanguageContent]:
         if isinstance(self._backend, AAISChatAPI):
             # Format the content to summarize with the template.
             prompt = AAISChatAPI.Message(
@@ -69,7 +69,7 @@ class AAISTransformer(AAISFunctional[T, T]):
 
             return_message = await self._backend.generateResponse([prompt])
 
-            return AAISFunctional.InvocationResult(
+            return AAISResult(
                 success=True,
                 output=return_message.content,
                 errorMessage=None

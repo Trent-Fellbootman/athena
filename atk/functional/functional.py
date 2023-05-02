@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Optional, Generic, TypeVar
+from typing import Generic, TypeVar
 
-from ..core import AAISThinkingLanguageContent
+from ..core import AAISThinkingLanguageContent, AAISResult
 
 
 inputType = TypeVar('inputType')
@@ -22,14 +21,8 @@ class AAISFunctional(ABC, Generic[inputType, outputType]):
     multiple times with the same input may yield different outputs.)
     """
 
-    @dataclass
-    class InvocationResult:
-        success: bool
-        output: Optional[outputType]
-        errorMessage: Optional[AAISThinkingLanguageContent]
-
     @abstractmethod
-    async def call(self, inputs: inputType) -> InvocationResult:
+    async def call(self, inputs: inputType) -> AAISResult[outputType, AAISThinkingLanguageContent]:
         """
         Call this function with the given arguments on the given backend.
         """

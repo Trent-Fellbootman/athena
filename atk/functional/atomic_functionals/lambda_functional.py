@@ -1,5 +1,5 @@
-from atk.functional.functional import inputType
 from ..functional import AAISFunctional
+from ...core import AAISResult, AAISThinkingLanguageContent
 from typing import TypeVar
 
 
@@ -26,8 +26,8 @@ class AAISLambda(AAISFunctional[T, U]):
 
         self._function = function
 
-    async def call(self, inputs: inputType) -> AAISFunctional.InvocationResult:
-        return AAISFunctional.InvocationResult(
+    async def call(self, inputs: T) -> AAISResult[U, AAISThinkingLanguageContent]:
+        return AAISResult(
             success=True,
             output=self._function(inputs),
             errorMessage=None
