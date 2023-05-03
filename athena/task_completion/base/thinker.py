@@ -1,4 +1,4 @@
-from ..core import (
+from athena.core import (
     AAISProcess, AAISMessagePacket, AAISThinkingLanguageContent,
     AAISSystemServer
 )
