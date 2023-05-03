@@ -47,17 +47,6 @@ class AAISAPIHubWithFunctionalBackend(AAISAPIHub, Generic[T]):
                 It is assumed that the return from this functional will always be valid
                 (i.e., index is valid), or the functional would return failure instead.
 
-            returnMessageMatcher:
-                A functional that matches a return message with an API call record.
-                The first argument in the inputs provides a description for each
-                API call in progress; the second argument is the return message
-                received.
-                The output is the index of the API call record that the return message
-                matches with (0-based) or -1 if no match can be found.
-
-                It is assumed that the return from this functional will always be valid
-                (i.e., index is valid), or the functional would return failure instead.
-
             errorMessageFormatter:
                 A functional that formats an error message.
                 The first argument in the inputs is the error type;
@@ -97,7 +86,6 @@ class AAISAPIHubWithFunctionalBackend(AAISAPIHub, Generic[T]):
         requestSummarizer: AAISFunctional[T, T]
         messageTypeDeterminer: AAISFunctional[T, AAISAPIServer.APIServerMessageType]
         handlerSelector: AAISFunctional[Tuple[Collection[T], T], int]
-        returnMessageMatcher: AAISFunctional[Tuple[Collection[T], T], int]
         errorMessageFormatter: AAISFunctional[Tuple[AAISAPIHub.ErrorType, Optional[T]], T]
         childServerRequestGenerator: AAISFunctional[Tuple[T, T], T]
         parentReturnMessageGenerator: AAISFunctional[Tuple[T, T], T]
@@ -141,36 +129,6 @@ class AAISAPIHubWithFunctionalBackend(AAISAPIHub, Generic[T]):
                 return AAISResult(
                     success=True,
                     value=list(self._referenceTable.entries)[result.value],
-                    errorMessage=None
-                )
-        else:
-            return AAISResult(
-                success=False,
-                value=None,
-                errorMessage=result.errorMessage
-            )
-
-    async def matchReturnMessageWithAPICallRecord(
-            self, returnMessage: AAISMessagePacket)\
-            -> AAISResult[AAISAPIServer.APICallRecordTable.Record, T]:
-
-        result = await self._backend.returnMessageMatcher.call((
-            [record.description for record in self.apiCallRecordTable.records],
-            returnMessage.content
-        ))
-
-        if result.success:
-            if result.value == -1:
-                return AAISResult(
-                    success=False,
-                    value=None,
-                    # TODO: add error message
-                    errorMessage=None
-                )
-            else:
-                return AAISResult(
-                    success=True,
-                    value=list(self.apiCallRecordTable.records)[result.value],
                     errorMessage=None
                 )
         else:

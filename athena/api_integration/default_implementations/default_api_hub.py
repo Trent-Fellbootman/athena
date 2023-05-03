@@ -1,8 +1,11 @@
+from ..base import AAISAPIHub
 from ..specialized_classes import AAISAPIHubWithFunctionalBackend
 from ...backend_abstractions import AAISAIBackend, AAISChatAPI
 from ...functional import atomic_functionals as atomic, compositors
 from ...thinking_languages.text import AAISText
 from ...core import AAISException
+
+from typing import Optional
 
 
 class AAISDefaultAPIHub(AAISAPIHubWithFunctionalBackend):
@@ -42,13 +45,6 @@ class AAISDefaultAPIHub(AAISAPIHubWithFunctionalBackend):
     @staticmethod
     def _make_default_backend(backend: AAISAIBackend, **kwargs) \
             -> AAISAPIHubWithFunctionalBackend.Backend:
-        def message_type_determiner_lambda(response: AAISText):
-            if response.content == "REQUEST":
-                return AAISDefaultAPIHub.APIServerMessageType.REQUEST
-            elif response.content == "REPORT":
-                return AAISDefaultAPIHub.APIServerMessageType.RETURN_MESSAGE
-            else:
-                raise AAISException()
 
         # TODO: add error handling for all selectors.
         #  Perhaps wrap them in `AAISSupervisedFunctional`s.
@@ -57,6 +53,64 @@ class AAISDefaultAPIHub(AAISAPIHubWithFunctionalBackend):
             language = kwargs.get("native_language", "English")
             match language.lower():
                 case "english":
+                    def message_type_determiner_lambda(response: AAISText):
+                        if response.content == "REQUEST":
+                            return AAISDefaultAPIHub.APIServerMessageType.REQUEST
+                        elif response.content == "REPORT":
+                            return AAISDefaultAPIHub.APIServerMessageType.RETURN_MESSAGE
+                        else:
+                            raise AAISException()
+
+                    def errorMessageFormatter(errorType: AAISAPIHub.ErrorType,
+                                              errorMessage: Optional[AAISText]) -> AAISText:
+                        # TODO: finetune these error messages for LLM-intelligibility.
+                        match errorType:
+                            case AAISAPIHub.ErrorType.FAILED_TO_DETERMINE_CHILD_SERVER_RETURN_RESULT_TYPE:
+                                return AAISText("""
+I dispatched your API call request to a child server and the child server has returned a result,
+but I was unable to determine if the result is successful or not.
+""")
+                            case AAISAPIHub.ErrorType.FAILED_TO_DETERMINE_MESSAGE_TYPE:
+                                return AAISText("""
+I am unable to determine the type of the message you sent.
+
+I am an API Hub server and I am supposed to receive API call requests and report messages from API servers.
+
+It seems that you neither requested an API call, nor reported the result of an API call.
+""")
+                            case AAISAPIHub.ErrorType.FAILED_TO_FIND_HANDLER:
+                                return AAISText("""
+It seems that no API call I support can handle your request.
+""")
+                            case AAISAPIHub.ErrorType.EXECUTION_ERROR:
+                                return_message = AAISText("""
+There was an error executing the API call.
+""")
+                                if errorMessage is not None:
+                                    return_message += AAISText(f"""
+
+The error message is as follows:
+
+{errorMessage.content}
+
+""")
+                            case AAISAPIHub.ErrorType.FAILED_TO_MATCH_API_CALL_RECORD:
+                                # TODO: do we need to include the API call ID here?
+                                return AAISText("""
+I am unable to find the API call record pertaining to your report.
+
+It seems that the specific API call operation that your report pertains to
+does not exist in my records.
+""")
+
+                    def return_message_type_determiner_lambda(response: AAISText) -> AAISAPIHub.APICallReturnResultType:
+                        if response.content == "SUCCESS":
+                            return AAISDefaultAPIHub.APICallReturnResultType.SUCCESS
+                        elif response.content == "FAILURE":
+                            return AAISDefaultAPIHub.APICallReturnResultType.FAILURE
+                        else:
+                            raise AAISException()
+
                     return AAISAPIHubWithFunctionalBackend.Backend(
                         requestSummarizer=atomic.AAISTransformer(
                             backend=backend,
@@ -134,31 +188,48 @@ Output the index ONLY and NOTHING ELSE. DO NOT PROVIDE ANY EXPLANATIONS.
                             item_formatter=lambda index, item: f"API {index}: {item}",
                             separator="\n\n",
                         ),
-                        returnMessageMatcher=atomic.AAISSelector(
-                            backend=backend,
-                            # FIXME: Known issue with this prompt (using ChatGPT):
-                            #  AI backend may match the message with a wrong operation
-                            #  while the message actually has no match, if operation ID
-                            #  is not available.
-                            prompt_template=AAISText("""
-There are several operations in progress, their descriptions are as follows:
+                        errorMessageFormatter=atomic.AAISLambda(
+                            function=errorMessageFormatter
+                        ),
+                        # FIXME: using such a prompt would result in the header
+                        #  (e.g., "API call has returned") to be repeated many times.
+                        #  fix this.
+                        #  Perhaps use a Transformer instead of a Lambda?
+                        #  Also, should we include the API call ID here?
+                        parentReturnMessageGenerator=atomic.AAISLambda(
+                            function=lambda returnMessage, apiCallDescription: AAISText(f"""
+The API call has returned. The return message is as follows:
 
-{0}
+{returnMessage.content}
 
-Now, there is a report message from an API server. The message is as follows:
+""")
+                        ),
+                        # TODO: do we need to use a transformer to transform the request intelligently?
+                        childServerRequestGenerator=atomic.AAISLambda(
+                            function=lambda request, description: request
+                        ),
+                        returnResultTypeDeterminer=compositors.AAISSequentialFunctional(
+                            functionals=[
+                                atomic.AAISTransformer(
+                                    backend=backend,
+                                    template=AAISText("""
+A job has just finished and its result have been reported. I want you to determine if the result is successful or not.
 
-"{1}"
+The result is as follows:
 
-Which operation does the message correspond to?
-Output the index of the operation (starting from 0) ONLY and NOTHING ELSE.
-If no match could be found, output "-1".
+{}
 
-For example, if operation 2 is the best fit, output "2" and NOTHING ELSE.
+If the result is successful, output "SUCCESS" only, and NOTHING ELSE;
+if the result is unsuccessful, output "FAILURE" only, and NOTHING ELSE;
+if you are unable to determine if the result is successful or not, output "UNKNOWN" only, and NOTHING ELSE.
 
 DO NOT PROVIDE ANY EXPLANATIONS.
-"""),
-                            item_formatter=lambda index, item: f"Operation {index}: {item}",
-                            separator="\n\n",
+""")
+                                ),
+                                atomic.AAISLambda(
+                                    function=return_message_type_determiner_lambda
+                                )
+                            ]
                         )
                     )
                 case _:

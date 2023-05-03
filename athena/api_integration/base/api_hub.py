@@ -249,16 +249,6 @@ class AAISAPIHub(AAISAPIServer, ABC):
         pass
 
     @abstractmethod
-    async def matchReturnMessageWithAPICallRecord(
-            self, returnMessage: AAISMessagePacket) \
-            -> AAISResult[AAISAPIServer.APICallRecordTable.Record, AAISThinkingLanguageContent]:
-        """
-        Matches a return message with an API call record.
-        """
-
-        pass
-
-    @abstractmethod
     async def formatErrorMessage(self, errorType: ErrorType, errorMessage: Optional[AAISThinkingLanguageContent]) \
             -> AAISThinkingLanguageContent:
         """

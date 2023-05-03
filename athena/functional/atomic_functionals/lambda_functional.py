@@ -36,11 +36,10 @@ class AAISLambda(AAISFunctional[T, U]):
                 value=self._function(inputs),
                 errorMessage=None
             )
-        # TODO: add custom exception type
         except AAISException:
             return AAISResult(
                 success=False,
                 value=None,
-                # TODO: add error message
+                # TODO: allow error message from the exception to be passed through
                 errorMessage=None
             )
