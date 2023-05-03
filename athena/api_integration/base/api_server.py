@@ -1,11 +1,11 @@
 from ...core import (
-    AAISThinkingLanguageContent, AAISProcess, AAISProcessAddress
+    AAISThinkingLanguageContent, AAISProcess, AAISProcessAddress, AAISResult
 )
 
 from enum import Enum
 from abc import ABC
 from dataclasses import dataclass
-from typing import Any, Set, Self
+from typing import Any, Set, Optional
 
 
 class AAISAPIServer(AAISProcess, ABC):
@@ -25,7 +25,13 @@ class AAISAPIServer(AAISProcess, ABC):
                 FAILURE = 3
 
             description: AAISThinkingLanguageContent
-            id: Any  # TODO
+            # identifier of the API call record in the record table of the current process
+            identifier: Any  # TODO
+            # identifier of the API call record in the record table of the parent process
+            # (i.e., the process that dispatched the API call)
+            # it is possible for this field to be None, as the parent process may not have
+            # a record table.
+            parentIdentifier: Optional[Any]  # TODO
             senderAddress: AAISProcessAddress
             status: APICallStatus
 
@@ -45,6 +51,10 @@ class AAISAPIServer(AAISProcess, ABC):
             """
 
             # TODO
+
+        def findRecordWithID(self, identifier: Any) -> AAISResult[Record, AAISThinkingLanguageContent]:
+            # TODO
+            pass
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

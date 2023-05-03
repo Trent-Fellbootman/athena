@@ -5,6 +5,7 @@ from collections import deque
 from typing import Optional
 
 from .api_server import AAISAPIServer
+from .messages import AAISAPIServerReportPacket, AAISAPIServerAPIRequestRoutePacket
 from ...core import (
     AAISMessagePacket, AAISThinkingLanguageContent, AAISProcess,
     AAISSystemServer, AAISResult
@@ -44,11 +45,15 @@ class AAISAPIHub(AAISAPIServer, ABC):
                     # 1. Update the API call table
 
                     # make new ID and create entry
-                    new_api_call_entry: AAISAPIServer.APICallRecordTable.Record = self._apiCallRecords.createEntry()
+                    new_api_call_record: AAISAPIServer.APICallRecordTable.Record = self._apiCallRecords.createEntry()
                     # set the fields of the entry
-                    new_api_call_entry.description = await self.summarizeRequest(receivedMessage.content)
-                    new_api_call_entry.senderAddress = receivedMessage.header.senderAddress
-                    new_api_call_entry.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.UNHANDLED
+                    new_api_call_record.description = await self.summarizeRequest(receivedMessage.content)
+                    new_api_call_record.senderAddress = receivedMessage.header.senderAddress
+                    new_api_call_record.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.UNHANDLED
+                    new_api_call_record.parentIdentifier = \
+                        receivedMessage.routeMetadata.upstreamApiCallRecordIdentifier \
+                        if isinstance(receivedMessage, AAISAPIServerAPIRequestRoutePacket) \
+                        else None
 
                     # 2. Forward the request to the correct child API server
 
@@ -64,19 +69,21 @@ class AAISAPIHub(AAISAPIServer, ABC):
                         dispatch_message = await self.formatRequestForChildServer(
                             receivedMessage.content, handler_entry)
 
-                        dispatch_message_header = AAISMessagePacket.Header(
-                            messageType=AAISMessagePacket.Header.MessageType.communication,
-                            senderAddress=self.address)
-
-                        dispatch_packet = AAISMessagePacket(
-                            header=dispatch_message_header,
-                            content=dispatch_message)
+                        dispatch_packet = AAISAPIServerAPIRequestRoutePacket(
+                            header=AAISMessagePacket.Header(
+                                messageType=AAISMessagePacket.Header.MessageType.communication,
+                                senderAddress=self.address),
+                            content=dispatch_message,
+                            routeMetadata=AAISAPIServerAPIRequestRoutePacket.RouteMetadata(
+                                upstreamApiCallRecordIdentifier=new_api_call_record.identifier
+                            )
+                        )
 
                         # send the packet to the child API server
                         await systemHandle.sendMessage(
                             dispatch_packet, handler_entry.refereeAddress)
 
-                        new_api_call_entry.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.RUNNING
+                        new_api_call_record.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.RUNNING
 
                     else:
                         # failed to find handler
@@ -86,28 +93,34 @@ class AAISAPIHub(AAISAPIServer, ABC):
                             errorMessage=handler_match_result.errorMessage)
 
                         # make the return packet
-                        return_message_header = AAISMessagePacket.Header(
-                            messageType=AAISMessagePacket.Header.MessageType.communication,
-                            senderAddress=self.address)
-
-                        return_packet = AAISMessagePacket(
-                            header=return_message_header,
-                            content=error_message)
+                        return_packet = AAISAPIServerReportPacket(
+                            header=AAISMessagePacket.Header(
+                                messageType=AAISMessagePacket.Header.MessageType.communication,
+                                senderAddress=self.address),
+                            content=error_message,
+                            reportMetadata=AAISAPIServerReportPacket.ReportMetadata(
+                                upstreamApiCallRecordIdentifier=new_api_call_record.parentIdentifier
+                            )
+                        )
 
                         # send the return message to the parent
                         await systemHandle.sendMessage(return_packet, receivedMessage.header.senderAddress)
 
-                        new_api_call_entry.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.FAILURE
+                        new_api_call_record.status = AAISAPIServer.APICallRecordTable.Record.APICallStatus.FAILURE
 
                 case AAISAPIServer.APIServerMessageType.RETURN_MESSAGE:
+                    # since the message is returned to this server, which is an API hub,
+                    # we can assume that the message contains api call record identifier,
+                    # which is passed to the child server when dispatching the API call request.
+                    assert isinstance(receivedMessage, AAISAPIServerReportPacket) and \
+                           receivedMessage.reportMetadata.upstreamApiCallRecordIdentifier is not None
+
                     # 1. Find the corresponding record in the API call table
-                    record_match_result = await self.matchReturnMessageWithAPICallRecord(receivedMessage)
+                    record_match_result = self.apiCallRecordTable.findRecordWithID(
+                        receivedMessage.reportMetadata.upstreamApiCallRecordIdentifier)
 
                     if record_match_result.success:
                         # successfully found the record
-                        # TODO: Add error handling for these.
-                        #  Mismatch is always possible.
-
                         assert record_match_result.value is not None
                         record = record_match_result.value
 
@@ -116,7 +129,7 @@ class AAISAPIHub(AAISAPIServer, ABC):
 
                         # update the status of the record
                         return_result_type_result = await self.determineAPICallReturnResultType(
-                                receivedMessage.content, record)
+                            receivedMessage.content, record)
 
                         if return_result_type_result.success:
                             match return_result_type_result.value:
@@ -132,13 +145,15 @@ class AAISAPIHub(AAISAPIServer, ABC):
                                 returnMessage=receivedMessage.content,
                                 context=record)
 
-                            parent_return_header = AAISMessagePacket.Header(
-                                messageType=AAISMessagePacket.Header.MessageType.communication,
-                                senderAddress=self.address)
-
-                            parent_return_packet = AAISMessagePacket(
-                                header=parent_return_header,
-                                content=parent_return_message)
+                            parent_return_packet = AAISAPIServerReportPacket(
+                                header=AAISMessagePacket.Header(
+                                    messageType=AAISMessagePacket.Header.MessageType.communication,
+                                    senderAddress=self.address),
+                                content=parent_return_message,
+                                reportMetadata=AAISAPIServerReportPacket.ReportMetadata(
+                                    upstreamApiCallRecordIdentifier=record.parentIdentifier
+                                )
+                            )
 
                             await systemHandle.sendMessage(parent_return_packet, record.senderAddress)
 
@@ -162,7 +177,8 @@ class AAISAPIHub(AAISAPIServer, ABC):
                     else:
                         # Failed to find record matching the return message
                         # send the error back to the sender of the message
-                        # TODO: what should we do here?
+
+                        # TODO: include the identifier of the record in the error message
                         return_message = await self.formatErrorMessage(
                             errorType=AAISAPIHub.ErrorType.FAILED_TO_MATCH_API_CALL_RECORD,
                             errorMessage=record_match_result.errorMessage)
@@ -180,18 +196,24 @@ class AAISAPIHub(AAISAPIServer, ABC):
         else:
             # failed to determine message's type;
             # send an error message to sender of the message
+
             return_message = await self.formatErrorMessage(
                 errorType=AAISAPIHub.ErrorType.FAILED_TO_DETERMINE_MESSAGE_TYPE,
                 errorMessage=None
             )
 
-            return_message_header = AAISMessagePacket.Header(
-                messageType=AAISMessagePacket.Header.MessageType.communication,
-                senderAddress=self.address)
-
-            return_packet = AAISMessagePacket(
-                header=return_message_header,
-                content=return_message)
+            return_packet = AAISAPIServerReportPacket(
+                header=AAISMessagePacket.Header(
+                    messageType=AAISMessagePacket.Header.MessageType.communication,
+                    senderAddress=self.address),
+                content=return_message,
+                reportMetadata=AAISAPIServerReportPacket.ReportMetadata(
+                    upstreamApiCallRecordIdentifier=
+                    receivedMessage.routeMetadata.upstreamApiCallRecordIdentifier
+                    if isinstance(receivedMessage, AAISAPIServerAPIRequestRoutePacket)
+                    else None
+                )
+            )
 
             await systemHandle.sendMessage(return_packet, receivedMessage.header.senderAddress)
 
