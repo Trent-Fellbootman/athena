@@ -127,7 +127,7 @@ class AAISSelector(AAISFunctional[Tuple[Collection[T], T], int]):
         if isinstance(self._backend, AAISChatAPI):
             choices, requirement = inputs
 
-            choices_block = self._separator.join(map(self._item_formatter, choices))
+            choices_block = self._separator.join(map(self._item_formatter, enumerate(choices)))
             prompt = self._prompt_template.format([choices_block, requirement])
             response = await self._backend.generateResponse([prompt])
 
@@ -151,3 +151,5 @@ class AAISSelector(AAISFunctional[Tuple[Collection[T], T], int]):
                     value=None,
                     errorMessage=self._error_message
                 )
+        else:
+            raise NotImplementedError(f"Backend {self._backend} is not supported!")

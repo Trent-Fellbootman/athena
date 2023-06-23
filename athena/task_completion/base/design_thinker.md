@@ -82,6 +82,21 @@ old connections to remove, and whether "that's all" (similar to the previous fie
 - A wait field, including both a boolean denoting whether to wait for a message
 before starting another thinking step, and which process to wait on (if any).
 
+With a state machine, there is actually no need to separate one thinking step
+into multiple sub-steps.
+One implementation would be to have one state variable only;
+at each step (sub-step), the state variable is modified in some way,
+and the thinker process takes an action based on the current state variable.
+An action could be anything, e.g., modifying the reference table or viewing
+the current reference table.
+For a chat backend, for example, the action "modifying the reference table"
+would be executed by the process translating the return message generated
+and adding or removing entries in the reference table accordingly;
+the action "viewing the reference table" would be executed by adding
+a message containing the current reference table to the message history.
+When one thinking step completes (logically), the state variable is reset;
+also, actions may include waiting for a message to be received.
+
 
 ## Concurrency
 
