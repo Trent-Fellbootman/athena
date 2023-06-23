@@ -1,5 +1,9 @@
 # Athena AI
 
+## Important notice: This project is being rebased onto OpenNN. Backend abstractions are expected to use OpenNN instead.
+
+## Important notice: This project is under development, pending rebasement onto OpenNN. Current code is considered obsolete.
+
 ## Overview
 
 Athena AI is a framework for developing complex AI systems.
